@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/sync";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,6 +45,7 @@ export default function NeuPage() {
   const [wishes, setWishes] = useState("");
   const [status, setStatus] = useState<{ message: string; progress: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   if (profile === undefined) return <Loading />;
   if (profile === null)
@@ -53,10 +55,20 @@ export default function NeuPage() {
   const budgetNum = parseFloat(budget.replace(",", "."));
   const perMeal = count && budgetNum ? budgetNum / count / profile.persons : 0;
 
-  const start = async () => {
+  // Kostenschätzung aus den bisherigen Plänen, sonst Erfahrungswert
+  const pastCosts = (getStored("plans") ?? []).map((p) => p.aiCostCents).filter((c): c is number => typeof c === "number" && c > 0);
+  const estimate = pastCosts.length ? Math.max(1, Math.round(pastCosts.slice(0, 5).reduce((a, b) => a + b, 0) / Math.min(5, pastCosts.length))) : 10;
+
+  const askConfirm = () => {
     setError(null);
     if (!budgetNum || budgetNum <= 0) return setError("Bitte ein Budget eingeben.");
     if (!count) return setError("Bitte mindestens eine Mahlzeit auswählen.");
+    setConfirming(true);
+  };
+
+  const start = async () => {
+    setConfirming(false);
+    setError(null);
     const cookbook = getStored("cookbook");
     const lastPlan = getStored("plans")[0];
     const req: PlanRequest = {
@@ -72,7 +84,7 @@ export default function NeuPage() {
     localStorage.setItem("essensplaner:lastRequest", JSON.stringify({ budget: budgetNum, slots, favoritesCount }));
     setStatus({ message: "Starte …", progress: 2 });
     try {
-      const res = await fetch("/api/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
+      const res = await apiFetch("/api/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...req, confirmed: true }) });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `Fehler ${res.status}`);
@@ -186,9 +198,31 @@ export default function NeuPage() {
 
       {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
 
-      <button type="button" className="btn-primary mb-4 w-full py-4 text-lg" onClick={start}>
+      <button type="button" className="btn-primary mb-4 w-full py-4 text-lg" onClick={askConfirm}>
         ✨ Plan & Einkaufsliste erstellen
       </button>
+
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal="true" onClick={() => setConfirming(false)}>
+          <div className="card w-full max-w-sm p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center text-4xl">💶</div>
+            <h2 className="mt-2 text-center text-lg font-bold">Neuen Wochenplan erstellen?</h2>
+            <p className="mt-2 text-center text-sm text-stone-600 dark:text-stone-400">
+              Die KI plant {count} Mahlzeiten mit den aktuellen Angeboten. Das kostet einmalig ca. <b>{estimate} Cent</b> KI-Guthaben
+              {pastCosts.length ? " (Schnitt eurer letzten Pläne)" : ""}.
+            </p>
+            <p className="mt-2 text-center text-xs text-stone-500">Rezepte aus dem Rezeptbuch sind danach kostenlos, neue kosten ca. 1 Cent beim ersten Öffnen.</p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" className="btn-primary w-full" onClick={start}>
+                Ja, Plan erstellen (ca. {estimate} ct)
+              </button>
+              <button type="button" className="btn-secondary w-full" onClick={() => setConfirming(false)}>
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

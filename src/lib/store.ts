@@ -56,7 +56,23 @@ function read<K extends keyof Keys>(key: K): Keys[K] {
 
 let persistAsked = false;
 
+export type StoreKeys = Keys;
+type WriteHook = <K extends keyof Keys>(key: K, before: Keys[K], after: Keys[K]) => void;
+let writeHook: WriteHook | null = null;
+/** Wird von der Synchronisierung gesetzt, um Änderungen an den Server zu melden. */
+export function setWriteHook(h: WriteHook | null) {
+  writeHook = h;
+}
+
+/** Änderung durch die App: lokal speichern und (falls aktiv) synchronisieren. */
 export function write<K extends keyof Keys>(key: K, value: Keys[K]) {
+  const before = read(key);
+  writeLocal(key, value);
+  writeHook?.(key, before, value);
+}
+
+/** Nur lokal speichern (z. B. Daten, die gerade vom Server kamen). */
+export function writeLocal<K extends keyof Keys>(key: K, value: Keys[K]) {
   // Browser bitten, die Daten dauerhaft zu behalten (nicht bei Speicherknappheit löschen)
   if (!persistAsked) {
     persistAsked = true;

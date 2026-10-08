@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/sync";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -39,7 +40,7 @@ function Gericht() {
     if (!needsRecipe || !meal || !profile) return;
     let cancelled = false;
     const tag = `${key}#${attempt}`;
-    fetch("/api/recipe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ meal, profile }) })
+    apiFetch("/api/recipe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ meal, profile }) })
       .then(async (res) => {
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(j.error || "Rezept konnte nicht geladen werden");

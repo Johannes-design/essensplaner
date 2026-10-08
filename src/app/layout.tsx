@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import HouseholdGate from "@/components/HouseholdGate";
 
 export const metadata: Metadata = {
   title: "Kochfaul – Wochenplan & Einkauf",
@@ -22,10 +23,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="de">
       <body className="min-h-dvh font-sans antialiased">
-        <main className="mx-auto max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
-          {children}
-        </main>
-        <BottomNav />
+        <HouseholdGate>
+          <main className="mx-auto max-w-lg px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
+            {children}
+          </main>
+          <BottomNav />
+        </HouseholdGate>
       </body>
     </html>
   );

@@ -1,3 +1,4 @@
+import { requireCode } from "@/lib/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateRecipe, hasApiKey } from "@/lib/ai";
 import { isDemo } from "@/lib/offer-source";
@@ -6,6 +7,8 @@ import type { Meal, Profile, Recipe } from "@/lib/types";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
+  const denied = requireCode(request);
+  if (denied) return denied;
   const { meal, profile } = (await request.json()) as { meal: Meal; profile: Profile };
   if (!meal?.name || !profile) return Response.json({ error: "Ungültige Anfrage" }, { status: 400 });
 

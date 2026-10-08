@@ -143,7 +143,7 @@ function ProfilForm({ initial, onImported }: { initial: Profile | null; onImport
       </div>
 
       {!isNew && (
-        <Section title="Daten sichern" hint="Alles wird nur auf diesem Gerät gespeichert. Hier kannst du es sichern oder auf ein anderes Gerät übertragen.">
+        <Section title="Daten sichern" hint="Sicherungskopie aller Daten als Datei – zur Sicherheit ab und zu exportieren.">
           <div className="flex gap-2">
             <button
               type="button"

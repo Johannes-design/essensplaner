@@ -1,3 +1,4 @@
+import { requireCode } from "@/lib/auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildPlanPrompt, costCents, generatePlan, hasApiKey } from "@/lib/ai";
 import { demoPlan } from "@/lib/demo";
@@ -14,7 +15,11 @@ type Event =
   | { type: "error"; message: string };
 
 export async function POST(request: Request) {
-  const req = (await request.json()) as PlanRequest;
+  const denied = requireCode(request);
+  if (denied) return denied;
+  const req = (await request.json()) as PlanRequest & { confirmed?: boolean };
+  // Kostet KI-Guthaben: nur nach ausdrücklicher Bestätigung in der App
+  if (req.confirmed !== true) return Response.json({ error: "Bitte die Kosten bestätigen" }, { status: 400 });
   const invalid = validate(req);
   if (invalid) return Response.json({ error: invalid }, { status: 400 });
 

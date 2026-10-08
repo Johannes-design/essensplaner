@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/sync";
 import { useEffect, useMemo, useState } from "react";
 import { euro, useStored } from "@/lib/store";
 import { STORES } from "@/lib/constants";
@@ -19,7 +20,7 @@ export default function AngebotePage() {
   useEffect(() => {
     if (profile === undefined) return;
     let cancelled = false;
-    fetch(url)
+    apiFetch(url)
       .then((r) => r.json())
       .then((j) => !cancelled && setRes({ url, data: j }))
       .catch(() => !cancelled && setRes({ url, error: "Angebote konnten nicht geladen werden." }));
