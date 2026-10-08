@@ -1,0 +1,93 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { buildPlanPrompt, generatePlan, hasApiKey } from "@/lib/ai";
+import { demoPlan } from "@/lib/demo";
+import { offersToPromptLines } from "@/lib/offers";
+import { isDemo, loadOffers, selectForPrompt } from "@/lib/offer-source";
+import { postprocess } from "@/lib/postprocess";
+import type { PlanRequest } from "@/lib/types";
+
+export const maxDuration = 300;
+
+type Event =
+  | { type: "status"; message: string; progress: number }
+  | { type: "result"; plan: unknown }
+  | { type: "error"; message: string };
+
+export async function POST(request: Request) {
+  const req = (await request.json()) as PlanRequest;
+  const invalid = validate(req);
+  if (invalid) return Response.json({ error: invalid }, { status: 400 });
+
+  const enc = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (e: Event) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
+      // Verbindung offen halten, solange die KI rechnet
+      const ping = setInterval(() => controller.enqueue(enc.encode("\n")), 10000);
+      try {
+        send({ type: "status", message: "Suche die aktuellen Angebote in Stralsund …", progress: 5 });
+        const demo = isDemo() || !hasApiKey();
+        const { offers, source, note } = await loadOffers(req.profile.zipCode, req.profile.stores, req.weekStart, { allowWebSearch: !demo });
+        const forPrompt = selectForPrompt(offers);
+        send({
+          type: "status",
+          message: offers.length ? `${offers.length} Angebote gefunden (${note}). Plane die Woche …` : "Keine Angebote gefunden – plane mit normalen Preisen …",
+          progress: 20,
+        });
+
+        if (demo) {
+          const { plan } = postprocess(demoPlan(req), req, offers, { offerSource: source, demo: true });
+          await new Promise((r) => setTimeout(r, 800));
+          send({ type: "result", plan });
+          return;
+        }
+
+        const messages: Anthropic.Beta.BetaMessageParam[] = [
+          { role: "user", content: buildPlanPrompt(req, forPrompt, offersToPromptLines(forPrompt), note) },
+        ];
+        let result: ReturnType<typeof postprocess> | null = null;
+        let lastSent = 0;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const base = 20 + attempt * 25;
+          const { data, message } = await generatePlan(messages, (chars) => {
+            // grobe Fortschrittsanzeige anhand der erzeugten Zeichen, höchstens alle 1,5 s
+            if (Date.now() - lastSent < 1500) return;
+            lastSent = Date.now();
+            const p = Math.min(base + 24, base + Math.round((chars / 14000) * 24));
+            send({ type: "status", message: attempt ? "Korrigiere den Plan …" : "Stelle Gerichte und Einkaufsliste zusammen …", progress: p });
+          });
+          result = postprocess(data, req, forPrompt, { offerSource: source, demo: false });
+          if (!result.problems.length) break;
+          if (attempt === 2) break;
+          send({ type: "status", message: "Prüfe Budget & Allergien – verbessere den Plan …", progress: base + 25 });
+          messages.push({ role: "assistant", content: message.content });
+          messages.push({
+            role: "user",
+            content: `Die automatische Prüfung hat Probleme gefunden:\n- ${result.problems.join("\n- ")}\n\nBitte gib den kompletten, korrigierten Plan erneut aus.`,
+          });
+        }
+        send({ type: "result", plan: result!.plan });
+      } catch (e) {
+        console.error("[plan]", e);
+        let message = e instanceof Error ? e.message : "Unbekannter Fehler";
+        if (e instanceof Anthropic.AuthenticationError) message = "Der API-Schlüssel ist ungültig.";
+        else if (e instanceof Anthropic.RateLimitError) message = "Zu viele Anfragen – bitte in einer Minute erneut versuchen.";
+        else if (e instanceof Anthropic.APIError) message = `KI-Dienst nicht erreichbar (${e.status ?? "Netzwerk"}). Bitte erneut versuchen.`;
+        send({ type: "error", message });
+      } finally {
+        clearInterval(ping);
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+}
+
+function validate(r: PlanRequest): string | null {
+  if (!r?.profile) return "Profil fehlt";
+  if (!(r.budget > 0 && r.budget < 2000)) return "Bitte ein gültiges Budget angeben";
+  if (!Array.isArray(r.slots) || r.slots.length !== 7) return "Ungültige Wochenauswahl";
+  if (!r.slots.some((s) => s.mittag || s.abend)) return "Bitte mindestens eine Mahlzeit auswählen";
+  if (!r.profile.stores?.length) return "Bitte mindestens einen Markt im Profil auswählen";
+  return null;
+}
