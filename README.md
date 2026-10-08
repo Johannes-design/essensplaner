@@ -33,7 +33,7 @@ Logik-Test: `npx tsx scripts/check-logic.ts` · Lokal mit Test-Datenbank: `REDIS
 
 ## Deployment (Vercel)
 1. Repo bei Vercel importieren, Umgebungsvariable `ANTHROPIC_API_KEY` setzen.
-2. `HOUSEHOLD_CODE` setzen (der Code, den alle im Haushalt einmal eingeben).
+2. Haushalts-Code: Sein SHA-256-Hash steht in `src/lib/auth.ts`. Optional überschreibt die Umgebungsvariable `HOUSEHOLD_CODE` ihn.
 3. Storage → „Upstash for Redis“ (kostenloser Tarif) anlegen und mit dem Projekt verbinden
    (setzt `KV_REST_API_URL`/`KV_REST_API_TOKEN` bzw. `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`).
 4. Neu deployen.
