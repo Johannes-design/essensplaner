@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getStored, isoDate, mondayOf, useStored, write, euro } from "@/lib/store";
+import { cookbookDishNames, dishKey, getStored, isoDate, mondayOf, useStored, write, euro } from "@/lib/store";
 import { DAYS_SHORT, type Plan, type PlanRequest, type WeekSlots } from "@/lib/types";
 import { Empty, Header, Loading, Section } from "@/components/ui";
 
@@ -57,7 +57,18 @@ export default function NeuPage() {
     setError(null);
     if (!budgetNum || budgetNum <= 0) return setError("Bitte ein Budget eingeben.");
     if (!count) return setError("Bitte mindestens eine Mahlzeit auswählen.");
-    const req: PlanRequest = { profile, budget: budgetNum, weekStart, slots, favoritesCount, wishes };
+    const cookbook = getStored("cookbook");
+    const lastPlan = getStored("plans")[0];
+    const req: PlanRequest = {
+      profile,
+      budget: budgetNum,
+      weekStart,
+      slots,
+      favoritesCount,
+      wishes,
+      knownDishes: cookbookDishNames(cookbook),
+      lastWeekDishes: lastPlan && lastPlan.weekStart !== weekStart ? [...new Set(lastPlan.meals.map((m) => m.name))] : [],
+    };
     localStorage.setItem("essensplaner:lastRequest", JSON.stringify({ budget: budgetNum, slots, favoritesCount }));
     setStatus({ message: "Starte …", progress: 2 });
     try {
@@ -86,6 +97,10 @@ export default function NeuPage() {
       }
       if (!plan) throw new Error("Die Verbindung wurde unterbrochen. Bitte erneut versuchen.");
       write("plans", [plan, ...getStored("plans")].slice(0, 20));
+      // Wiederverwendete Rezepte zählen (oft genutzte werden bevorzugt vorgeschlagen)
+      const cb = { ...getStored("cookbook") };
+      for (const m of new Set(plan.meals.map((m) => dishKey(m.name, m.servings)))) if (cb[m]) cb[m] = { ...cb[m], uses: cb[m].uses + 1 };
+      write("cookbook", cb);
       router.push("/");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Fehler");

@@ -2,10 +2,11 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { euro, getStored, useStored, write } from "@/lib/store";
+import { dishKey, euro, findInCookbook, getStored, useStored, write } from "@/lib/store";
 import { useCurrentPlan } from "@/lib/usePlan";
 import { storeName } from "@/lib/constants";
 import { DAYS, type Recipe } from "@/lib/types";
+import { Ingredients, Steps } from "@/components/RecipeView";
 import { Empty, Loading } from "@/components/ui";
 
 export default function Page() {
@@ -21,14 +22,17 @@ function Gericht() {
   const id = params.get("id");
   const { plan } = useCurrentPlan();
   const [profile, setProfile] = useStored("profile");
-  const [recipes] = useStored("recipes");
+  const [cookbook] = useStored("cookbook");
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Demo-Rezepte werden nicht ins Rezeptbuch übernommen
+  const [demoRecipe, setDemoRecipe] = useState<{ key: string; recipe: Recipe } | null>(null);
   const meal = plan?.meals.find((m) => m.id === id);
-  const key = plan && meal ? `${plan.id}:${meal.id}` : "";
-  const recipe: Recipe | undefined = recipes?.[key];
+  const key = meal ? dishKey(meal.name, meal.servings) : "";
+  // Rezept aus dem Rezeptbuch – nur wenn keins da ist, wird eins erzeugt (kostet KI-Guthaben)
+  const recipe = meal ? (findInCookbook(cookbook, meal.name, meal.servings)?.recipe ?? (demoRecipe?.key === key ? demoRecipe.recipe : undefined)) : undefined;
 
-  const needsRecipe = recipes !== undefined && !!meal && !!profile && !recipe;
+  const needsRecipe = cookbook !== undefined && !!meal && !!profile && !recipe;
   const failed = error?.key === `${key}#${attempt}` ? error.message : null;
 
   useEffect(() => {
@@ -39,7 +43,12 @@ function Gericht() {
       .then(async (res) => {
         const j = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(j.error || "Rezept konnte nicht geladen werden");
-        if (!cancelled) write("recipes", { ...getStored("recipes"), [key]: j.recipe });
+        if (cancelled) return;
+        if (j.demo) return setDemoRecipe({ key, recipe: j.recipe });
+        write("cookbook", {
+          ...getStored("cookbook"),
+          [key]: { key, name: meal.name, emoji: meal.emoji, description: meal.description, recipe: j.recipe, savedAt: new Date().toISOString(), uses: 1 },
+        });
       })
       .catch((e) => !cancelled && setError({ key: tag, message: e instanceof Error ? e.message : "Fehler" }));
     return () => {
@@ -107,37 +116,15 @@ function Gericht() {
 
       <div className="card mb-4 p-4">
         <h2 className="mb-2 font-semibold">🧺 Zutaten</h2>
-        <ul className="divide-y divide-stone-100 text-sm dark:divide-stone-800">
-          {(recipe?.ingredients ?? meal.ingredients.map((i) => ({ amount: `${i.amount ?? ""} ${i.unit}`.trim(), name: i.name }))).map((i, n) => (
-            <li key={n} className="flex gap-3 py-1.5">
-              <span className="w-24 shrink-0 text-right font-medium text-stone-600 dark:text-stone-400">{i.amount}</span>
-              <span>{i.name}</span>
-            </li>
-          ))}
-        </ul>
+        <Ingredients items={recipe?.ingredients ?? meal.ingredients.map((i) => ({ amount: `${i.amount ?? ""} ${i.unit}`.trim(), name: i.name }))} />
       </div>
 
       <div className="card mb-4 p-4">
         <h2 className="mb-3 font-semibold">👩‍🍳 Zubereitung</h2>
         {recipe ? (
           <>
-            <ol className="space-y-4">
-              {recipe.steps.map((s, n) => (
-                <li key={n} className="flex gap-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">{n + 1}</span>
-                  <div className="pt-0.5 text-[15px] leading-relaxed">
-                    {s.text}
-                    {s.minutes ? <span className="ml-1 text-xs text-stone-500">({s.minutes} Min.)</span> : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
-            {recipe.tips.length > 0 && (
-              <div className="mt-4 rounded-xl bg-stone-50 p-3 text-sm dark:bg-stone-800/60">
-                <b>💡 Tipps:</b>
-                <ul className="mt-1 list-disc pl-5">{recipe.tips.map((t) => <li key={t}>{t}</li>)}</ul>
-              </div>
-            )}
+            <Steps recipe={recipe} />
+            {demoRecipe?.key !== key && <p className="mt-3 text-xs text-stone-400">📖 Im Rezeptbuch gespeichert – nächstes Mal kostenlos.</p>}
           </>
         ) : failed ? (
           <div className="text-sm">

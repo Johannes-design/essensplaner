@@ -100,6 +100,8 @@ export interface Plan {
   offerSource: Offer["source"] | "keine";
   warnings: AllergenWarning[];
   demo: boolean;
+  /** geschätzte KI-Kosten für diesen Plan in US-Cent */
+  aiCostCents: number | null;
 }
 
 export interface Recipe {
@@ -118,4 +120,18 @@ export interface PlanRequest {
   slots: WeekSlots;
   favoritesCount: number;
   wishes: string;
+  /** Gerichte, für die schon ein Rezept im Rezeptbuch liegt */
+  knownDishes: string[];
+  /** Gerichte der letzten Woche (für Abwechslung) */
+  lastWeekDishes: string[];
+}
+
+export interface CookbookEntry {
+  key: string;
+  name: string;
+  emoji: string;
+  description: string;
+  recipe: Recipe;
+  savedAt: string;
+  uses: number;
 }

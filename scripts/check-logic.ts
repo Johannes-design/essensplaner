@@ -38,6 +38,8 @@ const req: PlanRequest = {
   slots: Array.from({ length: 7 }, (_, i) => ({ mittag: false, abend: i < 5 })),
   favoritesCount: 0,
   wishes: "",
+  knownDishes: [],
+  lastWeekDishes: [],
 };
 const raw = demoPlan(req);
 // KI-Preis absichtlich falsch: muss durch Angebotspreis ersetzt werden

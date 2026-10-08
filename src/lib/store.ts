@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useSyncExternalStore } from "react";
 import { DEFAULT_PANTRY, STORES } from "./constants";
-import type { Plan, Profile, Recipe } from "./types";
+import type { CookbookEntry, Plan, Profile } from "./types";
 
 export const DEFAULT_PROFILE: Profile = {
   name: "",
@@ -24,9 +24,9 @@ type Keys = {
   profile: Profile | null;
   plans: Plan[];
   checked: Record<string, string[]>; // planId -> ShoppingItem-IDs
-  recipes: Record<string, Recipe>; // `${planId}:${mealId}`
+  cookbook: Record<string, CookbookEntry>; // dishKey -> Rezept
 };
-const DEFAULTS: Keys = { profile: null, plans: [], checked: {}, recipes: {} };
+const DEFAULTS: Keys = { profile: null, plans: [], checked: {}, cookbook: {} };
 const PREFIX = "essensplaner:";
 
 const listeners = new Set<() => void>();
@@ -117,4 +117,28 @@ export function dayDate(weekStart: string, i: number) {
   const [y, m, d] = weekStart.split("-").map(Number);
   const x = new Date(y, m - 1, d + i);
   return x.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" });
+}
+
+/** Schlüssel fürs Rezeptbuch: gleicher Name + gleiche Portionen = gleiches Rezept. */
+export function dishKey(name: string, servings: number) {
+  const n = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  return `${n}|${servings}`;
+}
+
+export function findInCookbook(cookbook: Record<string, CookbookEntry> | undefined, name: string, servings: number) {
+  if (!cookbook) return undefined;
+  return cookbook[dishKey(name, servings)];
+}
+
+/** Namen fürs KI-Prompt: oft genutzte zuerst. */
+export function cookbookDishNames(cookbook: Record<string, CookbookEntry>) {
+  return Object.values(cookbook)
+    .sort((a, b) => b.uses - a.uses || b.savedAt.localeCompare(a.savedAt))
+    .map((e) => e.name);
 }

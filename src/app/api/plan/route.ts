@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { buildPlanPrompt, generatePlan, hasApiKey } from "@/lib/ai";
+import { buildPlanPrompt, costCents, generatePlan, hasApiKey } from "@/lib/ai";
 import { demoPlan } from "@/lib/demo";
 import { offersToPromptLines } from "@/lib/offers";
 import { isDemo, loadOffers, selectForPrompt } from "@/lib/offer-source";
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
         ];
         let result: ReturnType<typeof postprocess> | null = null;
         let lastSent = 0;
+        let cents = 0;
         for (let attempt = 0; attempt < 3; attempt++) {
           const base = 20 + attempt * 25;
           const { data, message } = await generatePlan(messages, (chars) => {
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
             const p = Math.min(base + 24, base + Math.round((chars / 14000) * 24));
             send({ type: "status", message: attempt ? "Korrigiere den Plan …" : "Stelle Gerichte und Einkaufsliste zusammen …", progress: p });
           });
+          cents += costCents(message.usage);
           result = postprocess(data, req, forPrompt, { offerSource: source, demo: false });
           if (!result.problems.length) break;
           if (attempt === 2) break;
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
             content: `Die automatische Prüfung hat Probleme gefunden:\n- ${result.problems.join("\n- ")}\n\nBitte gib den kompletten, korrigierten Plan erneut aus.`,
           });
         }
-        send({ type: "result", plan: result!.plan });
+        send({ type: "result", plan: { ...result!.plan, aiCostCents: Math.round(cents * 10) / 10 } });
       } catch (e) {
         console.error("[plan]", e);
         let message = e instanceof Error ? e.message : "Unbekannter Fehler";
@@ -89,5 +91,7 @@ function validate(r: PlanRequest): string | null {
   if (!Array.isArray(r.slots) || r.slots.length !== 7) return "Ungültige Wochenauswahl";
   if (!r.slots.some((s) => s.mittag || s.abend)) return "Bitte mindestens eine Mahlzeit auswählen";
   if (!r.profile.stores?.length) return "Bitte mindestens einen Markt im Profil auswählen";
+  r.knownDishes = Array.isArray(r.knownDishes) ? r.knownDishes.filter((d) => typeof d === "string").slice(0, 80) : [];
+  r.lastWeekDishes = Array.isArray(r.lastWeekDishes) ? r.lastWeekDishes.filter((d) => typeof d === "string").slice(0, 21) : [];
   return null;
 }

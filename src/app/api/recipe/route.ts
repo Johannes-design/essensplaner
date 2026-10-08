@@ -22,12 +22,12 @@ export async function POST(request: Request) {
       ],
       tips: ["Reste halten sich im Kühlschrank 2 Tage."],
     };
-    return Response.json({ recipe });
+    return Response.json({ recipe, demo: true });
   }
 
   try {
-    const recipe = await generateRecipe(meal, profile);
-    return Response.json({ recipe });
+    const { recipe, costCents } = await generateRecipe(meal, profile);
+    return Response.json({ recipe, costCents });
   } catch (e) {
     console.error("[recipe]", e);
     const msg = e instanceof Anthropic.APIError ? `KI-Dienst nicht erreichbar (${e.status ?? "Netzwerk"})` : e instanceof Error ? e.message : "Unbekannter Fehler";

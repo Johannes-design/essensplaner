@@ -144,6 +144,7 @@ export function postprocess(raw: RawPlan, req: PlanRequest, offers: Offer[], met
     offerSource: meta.offerSource,
     warnings: uniq,
     demo: meta.demo,
+    aiCostCents: null,
   };
   return { plan, problems };
 }

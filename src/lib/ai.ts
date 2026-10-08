@@ -6,7 +6,7 @@ import { allergenLabel } from "./allergens";
 import { CATEGORIES, STORES, storeName } from "./constants";
 import { DAYS, type Meal, type Offer, type PlanRequest, type Profile, type Recipe } from "./types";
 
-export const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
 let _client: Anthropic | null = null;
 export function client() {
@@ -126,6 +126,11 @@ ${p.leftoversForLunch ? "Reste-Option AN: Ein Mittagessen darf gerne aus den Res
 Lieblingsgerichte einplanen: ${req.favoritesCount > 0 && p.favoriteDishes.length ? `ca. ${Math.min(req.favoritesCount, p.favoriteDishes.length)} Lieblingsgerichte aus dem Profil in dieser Woche verwenden (isFavorite = true)` : "optional"}
 Wünsche für diese Woche: ${req.wishes.trim() || "keine"}
 
+## Rezeptbuch (Gerichte mit fertigem Rezept – Wiederverwenden spart Kosten)
+${req.knownDishes?.length ? req.knownDishes.slice(0, 80).join("; ") : "(noch leer)"}
+Nutze passende Gerichte aus dem Rezeptbuch gerne wieder und übernimm dann den Namen exakt. Etwa die Hälfte der Woche darf daraus kommen, wenn es zu Angeboten und Budget passt – Abwechslung bleibt wichtig.
+${req.lastWeekDishes?.length ? `Letzte Woche gab es schon: ${req.lastWeekDishes.join("; ")} – diese Woche möglichst andere Gerichte.` : ""}
+
 ## Erlaubte Märkte (Händler-Keys)
 ${storesAllowed}
 Nutze für "store" nur diese Keys oder "egal".
@@ -137,7 +142,24 @@ ${offerLines || "(keine Angebote verfügbar – schätze normale Discounter-Prei
 Erstelle jetzt den Wochenplan und die Einkaufsliste.`;
 }
 
-export interface Usage { input: number; output: number }
+// US-Dollar pro 1 Mio. Token: [Input, Output]
+const PRICES: Record<string, [number, number]> = {
+  "claude-sonnet-5-5": [2, 10],
+  "claude-opus-5-5": [4, 20],
+  "claude-haiku-5-5": [0.1, 0.5],
+};
+
+/** Grobe Kosten eines Aufrufs in US-Cent (inkl. Cache-Lese/-Schreibpreisen). */
+export function costCents(u: Anthropic.Beta.BetaUsage): number {
+  const [inp, out] = PRICES[MODEL] ?? [2, 10];
+  const usd =
+    ((u.input_tokens ?? 0) * inp +
+      (u.cache_creation_input_tokens ?? 0) * inp * 1.25 +
+      (u.cache_read_input_tokens ?? 0) * inp * 0.1 +
+      (u.output_tokens ?? 0) * out) /
+    1_000_000;
+  return usd * 100;
+}
 
 /** Ruft Claude mit strukturierter Ausgabe auf (Streaming, damit lange Antworten nicht in Timeouts laufen). */
 async function structured<T extends z.ZodType>(
@@ -150,6 +172,8 @@ async function structured<T extends z.ZodType>(
     max_tokens: opts.maxTokens,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
+    // Bei Korrekturrunden wird der bisherige Verlauf aus dem Cache gelesen (≈ 90 % günstiger)
+    cache_control: { type: "ephemeral" },
     system: opts.system,
     thinking: { type: "adaptive" },
     output_config: { effort: opts.effort, format: zodOutputFormat(schema) },
@@ -175,7 +199,7 @@ export async function generatePlan(
   return structured(PlanSchema, messages, { system: SYSTEM, effort: "medium", maxTokens: 48000, onProgress });
 }
 
-export async function generateRecipe(meal: Meal, profile: Profile): Promise<Recipe> {
+export async function generateRecipe(meal: Meal, profile: Profile): Promise<{ recipe: Recipe; costCents: number }> {
   const prompt = `Schreibe ein einfaches, gut verständliches Rezept für "${meal.name}" (${meal.description}).
 Portionen: ${meal.servings}. Maximale aktive Zeit: ${profile.maxCookMinutes} Minuten.
 Verwende genau diese eingekauften Zutaten (Mengen dürfen auf die Portionen verteilt sein) plus Vorrat (${profile.pantry.join(", ") || "nichts"}):
@@ -183,13 +207,14 @@ ${meal.ingredients.map((i) => `- ${i.amount ?? ""} ${i.unit} ${i.name}`.trim()).
 Küchengeräte: Herd, ${profile.equipment.join(", ") || "sonst nichts"}.
 ALLERGIEN – absolut verboten: ${profile.allergies.map(allergenLabel).join("; ") || "keine"}. Weitere No-Gos: ${profile.otherIntolerances || "keine"}.
 ${meal.leftoverOf ? "Dieses Gericht besteht aus Resten vom Vortag: beschreibe kurz das Aufwärmen/Aufpeppen." : ""}
-Schritte kurz und konkret (Temperaturen, Zeiten, Pfannengröße), für Kochanfänger. Maximal 8 Schritte. Tipps: z. B. Abwandlung, Aufbewahrung.`;
-  const { data } = await structured(RecipeSchema, [{ role: "user", content: prompt }], {
+Schritte kurz und konkret (Temperaturen, Zeiten, Pfannengröße), für Kochanfänger. Maximal 8 Schritte. Tipps: z. B. Abwandlung, Aufbewahrung.
+Das Rezept wird gespeichert und in späteren Wochen wiederverwendet: Schreibe es deshalb allgemein (keine Wochentage, keine Hinweise auf andere Gerichte dieser Woche, außer bei Resten).`;
+  const { data, message } = await structured(RecipeSchema, [{ role: "user", content: prompt }], {
     system: "Du bist eine geduldige Kochlehrerin für kochfaule Menschen. Antworte auf Deutsch.",
     effort: "low",
     maxTokens: 16000,
   });
-  return data;
+  return { recipe: data, costCents: costCents(message.usage) };
 }
 
 /** Fallback, wenn keine Prospektdaten abrufbar sind: Claude sucht die Angebote im Web. */

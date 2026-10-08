@@ -37,7 +37,7 @@ export async function loadOffers(zip: string, stores: string[], weekStart: strin
 }
 
 /** Für den Prompt: Angebote mit Rabatt zuerst, Liste begrenzen. */
-export function selectForPrompt(offers: Offer[], max = 450): Offer[] {
+export function selectForPrompt(offers: Offer[], max = 200): Offer[] {
   if (offers.length <= max) return offers;
   const discount = (o: Offer) => (o.oldPrice ? (o.oldPrice - o.price) / o.oldPrice : 0);
   return [...offers].sort((a, b) => discount(b) - discount(a)).slice(0, max);

@@ -13,7 +13,11 @@ Einkaufsliste und Rezepten mit Schritt-für-Schritt-Anleitung.
 - **Automatische Prüfung jedes Plans:** echte Angebotspreise statt KI-Schätzung, Budget,
   Allergene/Ernährungsform/Abneigungen per Stichwortliste. Bei Problemen korrigiert die KI den Plan
   (bis zu 2 Runden); was dann noch auffällt, wird rot markiert.
-- **Einkaufsliste** nach Markt sortiert, abhaken, teilen. **Rezepte** werden beim Antippen erzeugt und gespeichert.
+- **Einkaufsliste** nach Markt sortiert, abhaken, teilen.
+- **Rezeptbuch:** Rezepte werden beim ersten Antippen von der KI geschrieben und dauerhaft gespeichert.
+  Gleiches Gericht = kein neuer KI-Aufruf. Neue Pläne bekommen die bekannten Gerichte mitgeschickt und
+  verwenden sie bevorzugt wieder (Abwechslung zur Vorwoche bleibt) – die Kosten sinken mit der Zeit.
+- **Kosten:** Standardmodell Claude Sonnet 5.5; die KI-Kosten jedes Plans werden unter dem Plan angezeigt.
 - Alle Daten liegen nur auf dem Gerät (localStorage); Export/Import im Profil.
 
 ## Starten

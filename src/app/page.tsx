@@ -1,7 +1,7 @@
 "use client";
 import { Suspense } from "react";
 import Link from "next/link";
-import { useStored, euro, dayDate } from "@/lib/store";
+import { useStored, euro, dayDate, findInCookbook } from "@/lib/store";
 import { useCurrentPlan } from "@/lib/usePlan";
 import { DAYS, type Meal, type Plan } from "@/lib/types";
 import { Empty, Header, Loading } from "@/components/ui";
@@ -90,6 +90,11 @@ function Week() {
         </div>
       )}
 
+      <div className="mt-6 flex items-center justify-between text-sm text-stone-500">
+        <Link href="/rezepte" className="font-medium text-brand-600">📖 Mein Rezeptbuch →</Link>
+        {plan.aiCostCents != null && <span>KI-Kosten: ca. {plan.aiCostCents.toFixed(1).replace(".", ",")} ct</span>}
+      </div>
+
       {plans && plans.length > 1 && (
         <div className="mt-6">
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Frühere Pläne</h2>
@@ -132,6 +137,8 @@ function BudgetCard({ plan }: { plan: Plan }) {
 }
 
 function MealCard({ meal, plan }: { meal: Meal; plan: Plan }) {
+  const [cookbook] = useStored("cookbook");
+  const known = !!findInCookbook(cookbook, meal.name, meal.servings);
   const warn = plan.warnings.some((w) => w.mealId === meal.id);
   return (
     <Link href={`/gericht?plan=${plan.id}&id=${encodeURIComponent(meal.id)}`} className={`card flex items-center gap-3 p-3 active:bg-stone-50 dark:active:bg-stone-800 ${warn ? "ring-2 ring-red-400" : ""}`}>
@@ -143,7 +150,7 @@ function MealCard({ meal, plan }: { meal: Meal; plan: Plan }) {
           {meal.isFavorite && " · ❤️"}
         </div>
         <div className="truncate font-semibold">{meal.name}</div>
-        <div className="text-xs text-stone-500">⏱ {meal.prepMinutes} Min. · ca. {euro(meal.estimatedCost)}{meal.offerIds.length > 0 && " · 🏷️ Angebot"}</div>
+        <div className="text-xs text-stone-500">⏱ {meal.prepMinutes} Min. · ca. {euro(meal.estimatedCost)}{meal.offerIds.length > 0 && " · 🏷️ Angebot"}{known && " · 📖"}</div>
       </div>
       <span className="text-stone-300">›</span>
     </Link>
