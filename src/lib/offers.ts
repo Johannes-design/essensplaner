@@ -81,8 +81,19 @@ function storeKeyFor(uniqueName: string): string | null {
 function fmtUnit(o: MgOffer): string | null {
   const unit = o.unit?.shortName;
   const vol = o.volume ?? o.quantity;
-  if (unit && vol) return `${vol} ${unit}`;
-  return unit ?? null;
+  if (!unit || !vol) return unit ?? null;
+  const n = (x: number) => String(Math.round(x * 100) / 100).replace(".", ",");
+  if (unit === "kg" && vol < 1) return `${n(vol * 1000)} g`;
+  if (unit === "l" && vol < 1) return `${n(vol * 1000)} ml`;
+  if (unit === "Stk") return `${n(vol)} Stück`;
+  return `${n(vol)} ${unit}`;
+}
+
+function fmtRef(o: MgOffer): string | null {
+  if (!o.referencePrice) return null;
+  const u = o.unit?.shortName;
+  const per = u === "kg" || u === "g" ? "kg" : u === "l" || u === "ml" ? "l" : u === "Stk" ? "Stück" : null;
+  return per ? `${o.referencePrice.toFixed(2).replace(".", ",")} €/${per}` : null;
 }
 
 function overlaps(o: MgOffer, from: Date, to: Date) {
@@ -136,12 +147,16 @@ export async function fetchMarktguruOffers(zip: string, weekStart?: string): Pro
   }
 
   const seen = new Map<string, Offer>();
+  const unmatched = new Map<string, number>();
   for (const r of results) {
     if (r.status !== "fulfilled") continue;
     for (const o of r.value) {
       if (!overlaps(o, from, to) || typeof o.price !== "number" || o.price <= 0) continue;
       const adv = o.advertisers?.map((a) => ({ a, key: storeKeyFor(a.uniqueName) })).find((x) => x.key);
-      if (!adv?.key) continue;
+      if (!adv?.key) {
+        for (const a of o.advertisers ?? []) unmatched.set(a.uniqueName, (unmatched.get(a.uniqueName) ?? 0) + 1);
+        continue;
+      }
       const id = `mg-${o.id}-${adv.key}`;
       if (seen.has(id)) continue;
       const product = [o.product?.name, o.description && !o.product?.name ? o.description : null].filter(Boolean).join(" ") || "Angebot";
@@ -155,7 +170,7 @@ export async function fetchMarktguruOffers(zip: string, weekStart?: string): Pro
         price: o.price,
         oldPrice: o.oldPrice && o.oldPrice > o.price ? o.oldPrice : null,
         unit: fmtUnit(o),
-        referencePrice: o.referencePrice ? `${o.referencePrice.toFixed(2).replace(".", ",")} €/${o.unit?.shortName === "g" ? "kg" : o.unit?.shortName === "ml" ? "l" : "Einheit"}` : null,
+        referencePrice: fmtRef(o),
         validFrom: o.validityDates?.[0]?.from ?? null,
         validTo: o.validityDates?.[0]?.to ?? null,
         loyaltyRequired: !!o.requiresLoyalityMembership,
@@ -164,6 +179,8 @@ export async function fetchMarktguruOffers(zip: string, weekStart?: string): Pro
       });
     }
   }
+  // Hilft beim Nachjustieren der Händlerzuordnung (Vercel-Logs)
+  console.info("[offers]", zip, "zugeordnet:", seen.size, "nicht zugeordnete Händler:", JSON.stringify([...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 25)));
   const offers = [...seen.values()].sort((a, b) => a.store.localeCompare(b.store) || a.price - b.price);
   cache.set(cacheKey, { at: Date.now(), offers });
   return offers;
@@ -176,8 +193,8 @@ export function offersToPromptLines(offers: Offer[]): string {
       const parts = [
         o.id,
         o.storeName,
-        [o.brand, o.product].filter(Boolean).join(" "),
-        o.unit ?? "",
+        [o.brand, o.product].filter(Boolean).join(" ") + (o.description ? ` (${o.description.slice(0, 70)})` : ""),
+        o.unit ? `Preis gilt für ${o.unit}` : "",
         `${o.price.toFixed(2)} €`,
         o.oldPrice ? `statt ${o.oldPrice.toFixed(2)} €` : "",
         o.referencePrice ?? "",

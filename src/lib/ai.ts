@@ -93,6 +93,7 @@ Harte Regeln (niemals brechen):
 1. ALLERGIEN und Unverträglichkeiten haben oberste Priorität. Verwende keine Zutat und kein Produkt, das ein genanntes Allergen enthält oder typischerweise enthält (z. B. Pesto → Nüsse, Wraps → Gluten, Mayonnaise → Ei). Nutze bei Bedarf ausdrücklich freie Alternativen ("laktosefreie Milch", "glutenfreie Nudeln") und schreibe das so in den Produktnamen.
 2. Die Einkaufsliste muss in das Budget passen. Weniger ausgeben ist besser.
 3. Bei Angeboten aus der Liste ist der Preis pro Packung exakt der Angebotspreis und die offerId muss exakt übernommen werden. Erfinde keine Angebote oder IDs.
+3b. Achte auf die Menge, für die ein Angebotspreis gilt: "Preis gilt für 100 g" ist ein Thekenpreis – für 500 g Hackfleisch sind das packs = 5. Schreibe die tatsächlich gekaufte Menge in "quantity" (z. B. "500 g (5 × 100 g)").
 4. Für Produkte ohne Angebot schätze realistische deutsche Discounter-Preise (Aldi/Lidl-Niveau, 2026) und setze offerId = null.
 5. Plane nur die angefragten Mahlzeiten. Jedes Gericht im Plan muss genau einem angefragten Slot entsprechen.
 6. Die Einkaufsliste rechnet in ganzen Packungen, wie man sie im Laden kauft, und deckt alle Zutaten aller Gerichte ab – außer Vorrat.
@@ -136,7 +137,7 @@ ${storesAllowed}
 Nutze für "store" nur diese Keys oder "egal".
 
 ## Aktuelle Angebote (${offers.length} Stück, ${offerSourceNote})
-Format: ID | Markt | Produkt | Menge | Preis | Normalpreis | Grundpreis
+Format: ID | Markt | Produkt (Beschreibung) | Menge, für die der Preis gilt | Preis | Normalpreis | Grundpreis
 ${offerLines || "(keine Angebote verfügbar – schätze normale Discounter-Preise)"}
 
 Erstelle jetzt den Wochenplan und die Einkaufsliste.`;
