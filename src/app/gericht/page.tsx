@@ -9,6 +9,8 @@ import { storeName } from "@/lib/constants";
 import { DAYS, type Recipe } from "@/lib/types";
 import { Ingredients, Steps } from "@/components/RecipeView";
 import { Empty, Loading } from "@/components/ui";
+import MealActions from "@/components/MealActions";
+import { useRouter } from "next/navigation";
 
 export default function Page() {
   return (
@@ -26,6 +28,8 @@ function Gericht() {
   const [cookbook] = useStored("cookbook");
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [menu, setMenu] = useState(false);
+  const router = useRouter();
   // Demo-Rezepte werden nicht ins Rezeptbuch übernommen
   const [demoRecipe, setDemoRecipe] = useState<{ key: string; recipe: Recipe } | null>(null);
   const meal = plan?.meals.find((m) => m.id === id);
@@ -88,7 +92,11 @@ function Gericht() {
         <button type="button" onClick={toggleFav} className={`mt-4 ${isFav ? "btn-secondary" : "btn-primary"} w-full`}>
           {isFav ? "❤️ Ist ein Lieblingsgericht" : "🤍 Als Lieblingsgericht merken"}
         </button>
+        <button type="button" onClick={() => setMenu(true)} className="btn-secondary mt-2 w-full">
+          🔄 Gericht ändern
+        </button>
       </div>
+      {menu && <MealActions plan={plan} meal={meal} onClose={() => setMenu(false)} onRemoved={() => router.push("/")} />}
 
       {warnings.length > 0 && (
         <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { allergenLabel } from "./allergens";
 import { CATEGORIES, STORES, storeName } from "./constants";
-import { DAYS, type Meal, type Offer, type PlanRequest, type Profile, type Recipe } from "./types";
+import { DAYS, type Meal, type Offer, type Plan, type PlanRequest, type Profile, type Recipe } from "./types";
 
 export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
@@ -198,6 +198,57 @@ export async function generatePlan(
   onProgress?: (chars: number) => void,
 ) {
   return structured(PlanSchema, messages, { system: SYSTEM, effort: "medium", maxTokens: 48000, onProgress });
+}
+
+const SwapSchema = z.object({
+  meal: MealSchema,
+  shopping: z.array(ShoppingSchema).describe("die KOMPLETTE neue Einkaufsliste der Woche"),
+  note: z.string().describe("ein kurzer Satz, was sich geändert hat"),
+});
+export type SwapOutput = z.infer<typeof SwapSchema>;
+
+/** Tauscht ein Gericht aus und passt die Einkaufsliste an. */
+export async function generateSwap(
+  args: { plan: Plan; meal: Meal; wish: string; profile: Profile; knownDishes: string[]; offerLines: string; offerCount: number },
+  feedback?: { previous: Anthropic.Beta.BetaContentBlock[]; problems: string[] },
+) {
+  const { plan, meal, wish, profile } = args;
+  const others = plan.meals
+    .filter((m) => m.id !== meal.id)
+    .map((m) => `- ${DAYS[m.dayIndex]} ${m.slot}: ${m.name} (id ${m.id})${m.leftoverOf ? ` – Reste von ${m.leftoverOf}` : ""}`)
+    .join("\n");
+  const shopping = plan.shopping
+    .map((s) => `- ${s.name} | ${s.quantity} | packs ${s.packs} | ${s.store} | ${s.category} | offerId ${s.offerId ?? "null"} | ${(s.price / Math.max(1, s.packs)).toFixed(2)} € pro Packung | für ${s.forMeals.join(", ") || "-"}`)
+    .join("\n");
+  const prompt = `## Profil
+${profileText(profile)}
+
+## Aktueller Wochenplan (Budget ${plan.budget.toFixed(2)} €, Einkauf bisher ${plan.total.toFixed(2)} €)
+Andere Gerichte (bleiben unverändert):
+${others || "-"}
+
+## Dieses Gericht soll ersetzt werden
+${DAYS[meal.dayIndex]} ${meal.slot === "mittag" ? "Mittag" : "Abendbrot"}: „${meal.name}“ (id ${meal.id})
+Wunsch: ${wish.trim() || "einfach etwas anderes, das gut in die Woche passt"}
+Das neue Gericht bekommt dieselbe id ("${meal.id}"), denselben dayIndex (${meal.dayIndex}) und slot ("${meal.slot}").
+${plan.meals.some((m) => m.leftoverOf === meal.id) ? `Achtung: ein anderes Gericht isst Reste von diesem Gericht – plane das neue Gericht so, dass es wieder für die Reste reicht.` : ""}
+
+## Bisherige Einkaufsliste
+${shopping}
+
+Passe die Einkaufsliste an: Zutaten, die nur das alte Gericht brauchte, streichen; neue ergänzen; Mengen gemeinsamer Zutaten anpassen. Alle anderen Positionen unverändert übernehmen (gleicher Name, gleiche offerId, gleiche Packungen).
+
+## Rezeptbuch (wiederverwenden spart Kosten, Name dann exakt übernehmen)
+${args.knownDishes.slice(0, 80).join("; ") || "(leer)"}
+
+## Aktuelle Angebote (${args.offerCount})
+${args.offerLines || "(keine)"}`;
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: prompt }];
+  if (feedback) {
+    messages.push({ role: "assistant", content: feedback.previous });
+    messages.push({ role: "user", content: `Die Prüfung hat Probleme gefunden:\n- ${feedback.problems.join("\n- ")}\nBitte korrigiert erneut ausgeben.` });
+  }
+  return structured(SwapSchema, messages, { system: SYSTEM, effort: "low", maxTokens: 24000 });
 }
 
 export async function generateRecipe(meal: Meal, profile: Profile): Promise<{ recipe: Recipe; costCents: number }> {

@@ -1,10 +1,12 @@
 "use client";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useStored, euro, dayDate, findInCookbook } from "@/lib/store";
 import { useCurrentPlan } from "@/lib/usePlan";
 import { DAYS, type Meal, type Plan } from "@/lib/types";
 import { Empty, Header, Loading } from "@/components/ui";
+import MealActions from "@/components/MealActions";
+import { useLongPress } from "@/lib/useLongPress";
 
 export default function Home() {
   return (
@@ -60,7 +62,8 @@ function Week() {
           <b>Bitte prüfen:</b> {plan.warnings.map((w) => `${w.item} (${w.allergen})`).join(", ")}
         </Notice>
       )}
-      <p className="mb-4 text-sm text-stone-600 dark:text-stone-400">{plan.summary}</p>
+      <p className="mb-2 text-sm text-stone-600 dark:text-stone-400">{plan.summary}</p>
+      <p className="mb-4 text-xs text-stone-400">Tipp: Gericht gedrückt halten, um es zu tauschen, zu verschieben oder zu streichen.</p>
 
       <div className="space-y-4">
         {DAYS.map((day, i) => {
@@ -138,10 +141,18 @@ function BudgetCard({ plan }: { plan: Plan }) {
 
 function MealCard({ meal, plan }: { meal: Meal; plan: Plan }) {
   const [cookbook] = useStored("cookbook");
+  const [menu, setMenu] = useState(false);
+  const press = useLongPress(() => setMenu(true));
   const known = !!findInCookbook(cookbook, meal.name, meal.servings);
   const warn = plan.warnings.some((w) => w.mealId === meal.id);
   return (
-    <Link href={`/gericht?plan=${plan.id}&id=${encodeURIComponent(meal.id)}`} className={`card flex items-center gap-3 p-3 active:bg-stone-50 dark:active:bg-stone-800 ${warn ? "ring-2 ring-red-400" : ""}`}>
+    <>
+    <Link
+      href={`/gericht?plan=${plan.id}&id=${encodeURIComponent(meal.id)}`}
+      {...press}
+      style={{ WebkitTouchCallout: "none" }}
+      className={`card flex select-none items-center gap-3 p-3 active:bg-stone-50 dark:active:bg-stone-800 ${warn ? "ring-2 ring-red-400" : ""}`}
+    >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-2xl dark:bg-stone-800">{meal.emoji || "🍽️"}</div>
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-stone-500">
@@ -154,6 +165,8 @@ function MealCard({ meal, plan }: { meal: Meal; plan: Plan }) {
       </div>
       <span className="text-stone-300">›</span>
     </Link>
+    {menu && <MealActions plan={plan} meal={meal} onClose={() => setMenu(false)} />}
+    </>
   );
 }
 
