@@ -54,7 +54,14 @@ function read<K extends keyof Keys>(key: K): Keys[K] {
   return value;
 }
 
+let persistAsked = false;
+
 export function write<K extends keyof Keys>(key: K, value: Keys[K]) {
+  // Browser bitten, die Daten dauerhaft zu behalten (nicht bei Speicherknappheit löschen)
+  if (!persistAsked) {
+    persistAsked = true;
+    navigator.storage?.persist?.().catch(() => {});
+  }
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value));
   } catch (e) {
