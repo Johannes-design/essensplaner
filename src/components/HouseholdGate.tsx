@@ -69,7 +69,7 @@ export default function HouseholdGate({ children }: { children: React.ReactNode 
             setAttempt((a) => a + 1);
           }}
         >
-          <input className="input mb-3 text-center text-lg" type="password" autoComplete="current-password" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Code" autoFocus />
+          <input className="input mb-3 text-center text-lg" type="password" inputMode="numeric" autoComplete="current-password" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Code" autoFocus />
           {error && <p className="mb-3 text-center text-sm text-red-600">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={!input.trim()}>
             Öffnen

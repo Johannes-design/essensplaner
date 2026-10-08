@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 // Der Haushalts-Code steht nicht im Klartext im Code, nur sein SHA-256-Hash.
 // Eine Umgebungsvariable HOUSEHOLD_CODE hat Vorrang (zum Ändern ohne Code-Änderung).
-const CODE_SHA256 = "68572e3ea2b1f90c51f7824277df8a2aca1cd86e418a35364830d7f64dc7aced";
+const CODE_SHA256 = "ddb1369d147b442dd34d5a1b000084cdd96f70ca6535b8d6636fe676b6248955";
 
 const normalize = (s: string) => s.trim().toLowerCase();
 const sha = (s: string) => createHash("sha256").update(normalize(s)).digest();
