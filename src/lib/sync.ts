@@ -122,9 +122,10 @@ export async function pull(): Promise<boolean> {
     const data = (await res.json()) as StoreKeys;
     // Während des Ladens neu entstandene Änderungen nicht überschreiben
     if (queue().length) return false;
-    if (!data.profile && getStored("profile")) {
-      // Erstes Gerät: vorhandene lokale Daten hochladen
-      uploadAll();
+    if (!syncedBefore()) {
+      // Erstes Verbinden dieses Geräts: lokale Daten zusammenführen statt überschreiben
+      mergeFirst(data);
+      markSynced();
       return true;
     }
     writeLocal("profile", data.profile);
@@ -137,13 +138,69 @@ export async function pull(): Promise<boolean> {
   }
 }
 
-function uploadAll() {
+const SYNCED_KEY = "essensplaner:syncedOnce";
+function syncedBefore() {
+  try {
+    return localStorage.getItem(SYNCED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function markSynced() {
+  try {
+    localStorage.setItem(SYNCED_KEY, "1");
+  } catch {}
+}
+
+/** Vereinigt die Daten dieses Geräts mit dem gemeinsamen Stand. Nichts geht verloren. */
+function mergeFirst(server: StoreKeys) {
+  const local = {
+    profile: getStored("profile"),
+    plans: getStored("plans"),
+    checked: getStored("checked"),
+    cookbook: getStored("cookbook"),
+  };
   const ops: Op[] = [];
-  const profile = getStored("profile");
-  if (profile) ops.push({ op: "setProfile", profile });
-  ops.push(...diff("plans", [], getStored("plans")));
-  ops.push(...diff("checked", {}, getStored("checked")));
-  ops.push(...diff("cookbook", {}, getStored("cookbook")));
+
+  let profile = server.profile;
+  if (local.profile && !server.profile) {
+    profile = local.profile;
+    ops.push({ op: "setProfile", profile });
+  } else if (local.profile && server.profile && JSON.stringify(local.profile) !== JSON.stringify(server.profile)) {
+    const keepLocal = window.confirm(
+      `Auf diesem Gerät ist ein eigenes Profil gespeichert („${local.profile.name || "ohne Namen"}“), im Haushalt gibt es schon „${server.profile.name || "ohne Namen"}“.\n\nOK = Profil von diesem Gerät für alle übernehmen\nAbbrechen = gemeinsames Profil behalten`,
+    );
+    if (keepLocal) {
+      profile = local.profile;
+      ops.push({ op: "setProfile", profile });
+    }
+  }
+
+  const serverPlanIds = new Set(server.plans.map((p) => p.id));
+  const extraPlans = local.plans.filter((p) => !serverPlanIds.has(p.id));
+  extraPlans.forEach((plan) => ops.push({ op: "putPlan", plan }));
+  const plans = [...server.plans, ...extraPlans].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20);
+
+  const checked: Record<string, string[]> = { ...server.checked };
+  for (const [planId, ids] of Object.entries(local.checked)) {
+    const set = new Set(checked[planId] ?? []);
+    for (const id of ids) if (!set.has(id)) {
+      set.add(id);
+      ops.push({ op: "check", planId, itemId: id, on: true });
+    }
+    checked[planId] = [...set];
+  }
+
+  const cookbook = { ...server.cookbook };
+  for (const [k, e] of Object.entries(local.cookbook)) if (!(k in cookbook)) {
+    cookbook[k] = e;
+    ops.push({ op: "putRecipe", entry: e });
+  }
+
+  writeLocal("profile", profile);
+  writeLocal("plans", plans);
+  writeLocal("checked", checked);
+  writeLocal("cookbook", cookbook);
   enqueue(ops);
 }
 
