@@ -3,6 +3,45 @@ import { getStored, setWriteHook, writeLocal, type StoreKeys } from "./store";
 import type { CookbookEntry, Plan } from "./types";
 
 const CODE_KEY = "essensplaner:code";
+const NAME_KEY = "essensplaner:name";
+const HOUSEHOLD_KEY = "essensplaner:householdId";
+
+export function getName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+export function setName(name: string) {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {}
+}
+
+/** Zu welchem Haushalt die lokal gespeicherten Daten gehören. */
+export function getStoredHousehold(): string | null {
+  try {
+    return localStorage.getItem(HOUSEHOLD_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setStoredHousehold(id: string) {
+  try {
+    localStorage.setItem(HOUSEHOLD_KEY, id);
+  } catch {}
+}
+
+/** Alle lokalen Daten dieses Geräts löschen (Abmelden / anderer Zugang). */
+export function wipeLocal(keepLogin = false) {
+  try {
+    const keep = keepLogin ? [CODE_KEY, NAME_KEY] : [];
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("essensplaner:") && !keep.includes(k))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
 const QUEUE_KEY = "essensplaner:pendingOps";
 
 export function getCode(): string {
@@ -22,6 +61,7 @@ export function setCode(code: string) {
 export async function apiFetch(url: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("x-household-code", getCode());
+  headers.set("x-household-name", encodeURIComponent(getName()));
   const res = await fetch(url, { ...init, headers });
   if (res.status === 401) window.dispatchEvent(new Event("household:locked"));
   return res;
@@ -80,13 +120,15 @@ function saveQueue(q: Op[]) {
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let flushing: Promise<boolean> | null = null;
 
-async function flush(): Promise<boolean> {
+async function flush(keepalive = false): Promise<boolean> {
   if (flushing) return flushing;
   const run = (async () => {
     const q = queue();
     if (!q.length) return true;
     try {
-      const res = await apiFetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ops: q }) });
+      const body = JSON.stringify({ ops: q });
+      // keepalive erlaubt nur kleine Anfragen (~64 KB)
+      const res = await apiFetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: keepalive && body.length < 60000 });
       if (!res.ok) return false;
       // Nur die gesendeten Ops entfernen – inzwischen neu hinzugekommene bleiben
       saveQueue(queue().slice(q.length));
@@ -204,6 +246,11 @@ function mergeFirst(server: StoreKeys) {
   enqueue(ops);
 }
 
+/** Beim Verlassen/Schließen: ausstehende Änderungen sofort senden (keepalive überlebt das Schließen). */
+function flushOnExit() {
+  if (queue().length) void flush(true);
+}
+
 let started = false;
 /** Startet die Synchronisierung: erst laden, dann bei jeder Rückkehr in die App und alle 20 s. */
 export async function startSync(): Promise<boolean> {
@@ -211,7 +258,8 @@ export async function startSync(): Promise<boolean> {
   const ok = await pull();
   if (!started) {
     started = true;
-    document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void pull());
+    document.addEventListener("visibilitychange", () => (document.visibilityState === "visible" ? void pull() : flushOnExit()));
+    window.addEventListener("pagehide", flushOnExit);
     window.addEventListener("online", () => void pull());
     setInterval(() => document.visibilityState === "visible" && void pull(), 20000);
   }

@@ -58,7 +58,7 @@ export default function MealActions({ plan, meal, onClose, onRemoved }: { plan: 
 
         {view === "menu" && (
           <div className="flex flex-col gap-2">
-            <button type="button" className="btn-primary w-full justify-start" onClick={() => setView("swap")}>🔄 Anderes Gericht vorschlagen</button>
+            <button type="button" className="btn-primary w-full justify-start" onClick={() => setView("swap")}>🔄 Anderes oder eigenes Gericht</button>
             <button type="button" className="btn-secondary w-full justify-start" onClick={() => setView("move")}>📅 Mit anderem Tag tauschen</button>
             <button type="button" className="btn-secondary w-full justify-start text-red-600" onClick={() => setView("remove")}>🗑️ Gericht streichen</button>
             <button type="button" className="btn-secondary w-full" onClick={onClose}>Abbrechen</button>
@@ -67,8 +67,8 @@ export default function MealActions({ plan, meal, onClose, onRemoved }: { plan: 
 
         {view === "swap" && (
           <div>
-            <label className="label" htmlFor="wish">Worauf hast du stattdessen Lust? (optional)</label>
-            <textarea id="wish" className="input" rows={2} value={wish} onChange={(e) => setWish(e.target.value)} placeholder="z. B. lieber was mit Reis, ohne Ofen, etwas Leichtes" />
+            <label className="label" htmlFor="wish">Eigenes Gericht oder Wunsch (optional)</label>
+            <textarea id="wish" className="input" rows={2} value={wish} onChange={(e) => setWish(e.target.value)} placeholder="z. B. Salat mit Avocado und Tomaten – oder: lieber was mit Reis" />
             {known.length > 0 && (
               <>
                 <p className="mt-3 mb-1.5 text-sm text-stone-500">Oder aus dem Rezeptbuch:</p>
@@ -82,7 +82,7 @@ export default function MealActions({ plan, meal, onClose, onRemoved }: { plan: 
               </>
             )}
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-            <p className="mt-4 text-center text-xs text-stone-500">Die KI sucht ein neues Gericht und passt die Einkaufsliste an. Das kostet ca. 2 Cent.</p>
+            <p className="mt-4 text-center text-xs text-stone-500">Leer lassen = die KI schlägt etwas vor. Sie sucht passende Angebote, schreibt das Rezept und passt die Einkaufsliste an. Das kostet ca. 2 Cent.</p>
             <div className="mt-2 flex flex-col gap-2">
               <button type="button" className="btn-primary w-full" onClick={swap}>Ja, tauschen (ca. 2 ct)</button>
               <button type="button" className="btn-secondary w-full" onClick={() => setView("menu")}>Zurück</button>

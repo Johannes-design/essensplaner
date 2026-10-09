@@ -3,12 +3,16 @@ import { hashToObject, pipeline } from "./redis";
 import type { CookbookEntry, Plan, Profile } from "./types";
 
 // Ein gemeinsamer Haushalt: Profil, Pläne, Häkchen der Einkaufsliste und Rezeptbuch.
-const K = {
-  profile: "kochfaul:profile",
-  plans: "kochfaul:plans",
-  cookbook: "kochfaul:cookbook",
-  checked: (planId: string) => `kochfaul:checked:${planId}`,
-};
+// Der Haupt-Haushalt behält die ursprünglichen Schlüssel, weitere Haushalte bekommen einen eigenen Bereich.
+function keys(householdId: string) {
+  const pre = householdId === "main" ? "kochfaul:" : `kochfaul:hh:${householdId}:`;
+  return {
+    profile: `${pre}profile`,
+    plans: `${pre}plans`,
+    cookbook: `${pre}cookbook`,
+    checked: (planId: string) => `${pre}checked:${planId}`,
+  };
+}
 const MAX_PLANS = 20;
 
 export type SyncOp =
@@ -34,7 +38,8 @@ const parse = <T>(s: unknown): T | null => {
   }
 };
 
-export async function loadHousehold(): Promise<HouseholdData> {
+export async function loadHousehold(householdId: string): Promise<HouseholdData> {
+  const K = keys(householdId);
   const [profileRaw, plansRaw, cookbookRaw] = await pipeline([["GET", K.profile], ["HGETALL", K.plans], ["HGETALL", K.cookbook]]);
   let plans = Object.values(hashToObject(plansRaw))
     .map((s) => parse<Plan>(s))
@@ -61,7 +66,8 @@ export async function loadHousehold(): Promise<HouseholdData> {
 
 const str = (v: unknown, max = 200) => typeof v === "string" && v.length > 0 && v.length <= max;
 
-export async function applyOps(ops: unknown[]): Promise<void> {
+export async function applyOps(householdId: string, ops: unknown[]): Promise<void> {
+  const K = keys(householdId);
   const cmds: (string | number)[][] = [];
   for (const raw of ops) {
     const o = raw as SyncOp;

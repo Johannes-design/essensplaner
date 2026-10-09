@@ -1,4 +1,7 @@
-import { requireCode } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { recordCost } from "@/lib/costs";
+import { applyOps } from "@/lib/household";
+import { hasRedis } from "@/lib/redis";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildPlanPrompt, costCents, generatePlan, hasApiKey } from "@/lib/ai";
 import { demoPlan } from "@/lib/demo";
@@ -15,8 +18,8 @@ type Event =
   | { type: "error"; message: string };
 
 export async function POST(request: Request) {
-  const denied = requireCode(request);
-  if (denied) return denied;
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
   const req = (await request.json()) as PlanRequest & { confirmed?: boolean };
   // Kostet KI-Guthaben: nur nach ausdrücklicher Bestätigung in der App
   if (req.confirmed !== true) return Response.json({ error: "Bitte die Kosten bestätigen" }, { status: 400 });
@@ -26,9 +29,20 @@ export async function POST(request: Request) {
   const enc = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (e: Event) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
+      // Schließt jemand die App, läuft die Planung trotzdem zu Ende – Senden darf dann nicht abstürzen
+      let open = true;
+      const write = (text: string) => {
+        if (!open) return;
+        try {
+          controller.enqueue(enc.encode(text));
+        } catch {
+          open = false;
+        }
+      };
+      const send = (e: Event) => write(JSON.stringify(e) + "\n");
       // Verbindung offen halten, solange die KI rechnet
-      const ping = setInterval(() => controller.enqueue(enc.encode("\n")), 10000);
+      let cents = 0; // auch bei Fehlern abrechnen, was schon verbraucht wurde
+      const ping = setInterval(() => write("\n"), 10000);
       try {
         send({ type: "status", message: "Suche die aktuellen Angebote in Stralsund …", progress: 5 });
         const demo = isDemo() || !hasApiKey();
@@ -52,7 +66,6 @@ export async function POST(request: Request) {
         ];
         let result: ReturnType<typeof postprocess> | null = null;
         let lastSent = 0;
-        let cents = 0;
         for (let attempt = 0; attempt < 3; attempt++) {
           const base = 20 + attempt * 25;
           const { data, message } = await generatePlan(messages, (chars) => {
@@ -73,9 +86,14 @@ export async function POST(request: Request) {
             content: `Die automatische Prüfung hat Probleme gefunden:\n- ${result.problems.join("\n- ")}\n\nBitte gib den kompletten, korrigierten Plan erneut aus.`,
           });
         }
-        send({ type: "result", plan: { ...result!.plan, aiCostCents: Math.round(cents * 10) / 10 } });
+        await recordCost(auth.householdId, cents);
+        const finalPlan = { ...result!.plan, aiCostCents: Math.round(cents * 10) / 10 };
+        // Direkt im Haushalt speichern: geht nicht verloren, wenn die App zwischendurch geschlossen wurde
+        if (hasRedis()) await applyOps(auth.householdId, [{ op: "putPlan", plan: finalPlan }]).catch((err) => console.error("[plan] speichern", err));
+        send({ type: "result", plan: finalPlan });
       } catch (e) {
         console.error("[plan]", e);
+        await recordCost(auth.householdId, cents);
         let message = e instanceof Error ? e.message : "Unbekannter Fehler";
         if (e instanceof Anthropic.AuthenticationError) message = "Der API-Schlüssel ist ungültig.";
         else if (e instanceof Anthropic.RateLimitError) message = "Zu viele Anfragen – bitte in einer Minute erneut versuchen.";
@@ -83,7 +101,11 @@ export async function POST(request: Request) {
         send({ type: "error", message });
       } finally {
         clearInterval(ping);
-        controller.close();
+        if (open) {
+          try {
+            controller.close();
+          } catch {}
+        }
       }
     },
   });

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { requireCode } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { recordCost } from "@/lib/costs";
 import { costCents, generateSwap, hasApiKey } from "@/lib/ai";
 import { offersToPromptLines } from "@/lib/offers";
 import { isDemo, loadOffers, selectForPrompt } from "@/lib/offer-source";
@@ -18,8 +19,8 @@ interface SwapRequest {
 }
 
 export async function POST(request: Request) {
-  const denied = requireCode(request);
-  if (denied) return denied;
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
   const body = (await request.json()) as SwapRequest;
   if (body.confirmed !== true) return Response.json({ error: "Bitte die Kosten bestätigen" }, { status: 400 });
   const { plan, profile } = body;
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
       cents += costCents(out.message.usage);
       result = build(out);
     }
+    await recordCost(auth.householdId, cents);
     return Response.json({ plan: keepIdentity(result.plan, cents), note: out.data.note });
   } catch (e) {
     console.error("[swap]", e);

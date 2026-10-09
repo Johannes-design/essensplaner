@@ -1,4 +1,5 @@
-import { requireCode } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { recordCost } from "@/lib/costs";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateRecipe, hasApiKey } from "@/lib/ai";
 import { isDemo } from "@/lib/offer-source";
@@ -7,8 +8,8 @@ import type { Meal, Profile, Recipe } from "@/lib/types";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const denied = requireCode(request);
-  if (denied) return denied;
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
   const { meal, profile } = (await request.json()) as { meal: Meal; profile: Profile };
   if (!meal?.name || !profile) return Response.json({ error: "Ungültige Anfrage" }, { status: 400 });
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
   try {
     const { recipe, costCents } = await generateRecipe(meal, profile);
+    await recordCost(auth.householdId, costCents);
     return Response.json({ recipe, costCents });
   } catch (e) {
     console.error("[recipe]", e);

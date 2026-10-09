@@ -21,6 +21,8 @@ Einkaufsliste und Rezepten mit Schritt-für-Schritt-Anleitung.
 - **Gemeinsamer Haushalt:** Mit Haushalts-Code + Redis-Datenbank teilen alle Geräte ein Profil, die Pläne,
   die Häkchen der Einkaufsliste und das Rezeptbuch (Abgleich beim Öffnen und alle 20 s).
   Ohne Datenbank bleiben die Daten nur auf dem Gerät. Export/Import im Profil.
+- **Mehrere Zugänge:** Im Haupt-Haushalt (Code in `src/lib/auth.ts`) unter Profil → „Zugänge & Kosten“ weitere
+  Personen mit Name + Code anlegen. Jeder Zugang hat eigene Daten; KI-Kosten werden pro Zugang und Monat erfasst.
 - **Kostenschutz:** Ohne gültigen Haushalts-Code keine KI-Anfragen; vor jedem Wochenplan fragt die App nach.
 
 ## Starten

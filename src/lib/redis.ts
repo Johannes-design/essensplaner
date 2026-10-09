@@ -61,6 +61,15 @@ function mockExec(c: Cmd): unknown {
       db.set(key, h);
       return 1;
     }
+    case "HGET":
+      return hash().get(a[0]) ?? null;
+    case "HINCRBYFLOAT": {
+      const h = hash();
+      const v = (Number(h.get(a[0]) ?? 0) + Number(a[1])).toString();
+      h.set(a[0], v);
+      db.set(key, h);
+      return v;
+    }
     case "HGETALL":
       return [...hash()].flat();
     case "SADD": {

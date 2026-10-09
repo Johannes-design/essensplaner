@@ -1,15 +1,15 @@
-import { codeRequired, requireCode } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { applyOps, loadHousehold } from "@/lib/household";
 import { hasRedis } from "@/lib/redis";
 
 const disabled = () => Response.json({ error: "Synchronisierung ist nicht eingerichtet" }, { status: 404 });
 
 export async function GET(request: Request) {
-  if (!hasRedis() || !codeRequired()) return disabled();
-  const denied = requireCode(request);
-  if (denied) return denied;
+  if (!hasRedis()) return disabled();
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
   try {
-    return Response.json(await loadHousehold(), { headers: { "cache-control": "no-store" } });
+    return Response.json(await loadHousehold(auth.householdId), { headers: { "cache-control": "no-store" } });
   } catch (e) {
     console.error("[sync] laden", e);
     return Response.json({ error: "Daten konnten nicht geladen werden" }, { status: 502 });
@@ -17,9 +17,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!hasRedis() || !codeRequired()) return disabled();
-  const denied = requireCode(request);
-  if (denied) return denied;
+  if (!hasRedis()) return disabled();
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
   const text = await request.text();
   if (text.length > 2_000_000) return Response.json({ error: "Zu groß" }, { status: 413 });
   let ops: unknown;
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
   if (!Array.isArray(ops)) return Response.json({ error: "Ungültig" }, { status: 400 });
   try {
-    await applyOps(ops);
+    await applyOps(auth.householdId, ops);
     return Response.json({ ok: true });
   } catch (e) {
     console.error("[sync] speichern", e);

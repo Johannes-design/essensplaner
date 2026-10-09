@@ -6,6 +6,8 @@ import { DEFAULT_PANTRY, EQUIPMENT, STORES } from "@/lib/constants";
 import { DEFAULT_PROFILE, exportAll, importAll, useStored } from "@/lib/store";
 import type { Diet, Profile } from "@/lib/types";
 import { Header, Loading, Section, TagInput } from "@/components/ui";
+import Link from "next/link";
+import { logout, useSession } from "@/components/HouseholdGate";
 
 const DIETS: { key: Diet; label: string }[] = [
   { key: "alles", label: "Esse alles" },
@@ -29,6 +31,7 @@ function ProfilForm({ initial, onImported }: { initial: Profile | null; onImport
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const isNew = initial === null;
+  const session = useSession();
 
   const up = <K extends keyof Profile>(k: K, v: Profile[K]) => {
     setP({ ...p, [k]: v });
@@ -141,6 +144,28 @@ function ProfilForm({ initial, onImported }: { initial: Profile | null; onImport
           {saved ? "✓ Gespeichert" : isNew ? "Speichern & ersten Plan erstellen" : "Profil speichern"}
         </button>
       </div>
+
+      {session && (
+        <Section title="Anmeldung">
+          <p className="mb-3 text-sm text-stone-600 dark:text-stone-400">
+            Angemeldet als <b>{session.householdId === "main" ? "Haupt-Haushalt (Johannes & Maxi)" : session.name}</b>
+          </p>
+          <div className="flex flex-col gap-2">
+            {session.isAdmin && (
+              <Link href="/verwaltung" className="btn-secondary w-full">
+                👥 Zugänge & Kosten verwalten
+              </Link>
+            )}
+            <button
+              type="button"
+              className="btn-secondary w-full text-red-600"
+              onClick={() => confirm("Auf diesem Gerät abmelden? Deine Daten bleiben online gespeichert.") && logout()}
+            >
+              Abmelden
+            </button>
+          </div>
+        </Section>
+      )}
 
       {!isNew && (
         <Section title="Daten sichern" hint="Sicherungskopie aller Daten als Datei – zur Sicherheit ab und zu exportieren.">

@@ -193,7 +193,7 @@ export default function NeuPage() {
             <input type="range" min={0} max={Math.min(7, profile.favoriteDishes.length)} value={Math.min(favoritesCount, profile.favoriteDishes.length)} onChange={(e) => setFavoritesCount(Number(e.target.value))} className="w-full accent-brand-600" />
           </div>
         )}
-        <textarea className="input" rows={2} value={wishes} onChange={(e) => setWishes(e.target.value)} placeholder="z. B. mehr Gemüse, Freitag Pizza, Donnerstag Gäste" />
+        <textarea className="input" rows={2} value={wishes} onChange={(e) => setWishes(e.target.value)} placeholder="z. B. Dienstag Salat mit Avocado, Freitag Pizza, mehr Gemüse" />
       </Section>
 
       {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
