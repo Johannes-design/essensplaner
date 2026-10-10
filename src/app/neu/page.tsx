@@ -1,6 +1,6 @@
 "use client";
 import { apiFetch } from "@/lib/sync";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cookbookDishNames, dishKey, getStored, isoDate, mondayOf, useStored, write, euro } from "@/lib/store";
@@ -52,7 +52,25 @@ export default function NeuPage() {
     }
     return out;
   }, []);
-  const [shoppingDate, setShoppingDate] = useState(() => shopDays[0].value);
+  // Am Wochenende wird für die neue Woche geplant und Montag eingekauft
+  const [shoppingDate, setShoppingDate] = useState(() => {
+    const day = new Date().getDay();
+    const monday = shopDays.find((d) => new Date(`${d.value}T12:00:00`).getDay() === 1);
+    return (day === 6 || day === 0) && monday ? monday.value : shopDays[0].value;
+  });
+  // Gibt es für den Einkaufstag schon Prospektdaten?
+  const [availability, setAvailability] = useState<{ day: string; count: number; stores: string[] } | null>(null);
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    apiFetch(`/api/offers?summary=1&zip=${profile.zipCode}&stores=${profile.stores.join(",")}&day=${shoppingDate}`)
+      .then((r) => r.json())
+      .then((j) => !cancelled && setAvailability({ day: shoppingDate, count: j.count ?? 0, stores: j.stores ?? [] }))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, shoppingDate]);
   const [slots, setSlots] = useState<WeekSlots>(last?.slots?.length === 7 ? last.slots : PRESETS[0].make());
   const [favoritesCount, setFavoritesCount] = useState(last?.favoritesCount ?? 2);
   const [wishes, setWishes] = useState("");
@@ -189,6 +207,15 @@ export default function NeuPage() {
             </button>
           ))}
         </div>
+        {availability?.day !== shoppingDate ? (
+          <p className="mt-3 text-sm text-stone-400">Prüfe Prospekte …</p>
+        ) : availability.count >= 50 ? (
+          <p className="mt-3 text-sm text-brand-600">✓ {availability.count} Angebote für diesen Tag ({availability.stores.join(", ")})</p>
+        ) : (
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            {availability.count ? `Erst ${availability.count} Angebote für diesen Tag.` : "Für diesen Tag sind noch keine Prospekte online."} Die neuen Prospekte erscheinen meist am Samstag oder Sonntag – später noch einmal versuchen, oder einen früheren Einkaufstag wählen.
+          </p>
+        )}
       </Section>
 
       <Section title="🍽️ Wofür kaufst du ein?" hint="Tippe auf die Felder, um einzelne Mahlzeiten an- oder abzuwählen.">

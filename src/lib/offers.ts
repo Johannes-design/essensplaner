@@ -180,7 +180,9 @@ export async function fetchMarktguruOffers(zip: string): Promise<Offer[]> {
     }
   }
   // Hilft beim Nachjustieren der Händlerzuordnung (Vercel-Logs)
-  console.info("[offers]", zip, "zugeordnet:", seen.size, "nicht zugeordnete Händler:", JSON.stringify([...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 25)));
+  // Wie viele Angebote gelten erst ab einem späteren Tag (z. B. Prospekte der nächsten Woche)?
+  const future = [...seen.values()].filter((o) => o.validFrom && new Date(o.validFrom).getTime() > Date.now()).length;
+  console.info("[offers]", zip, "zugeordnet:", seen.size, "davon künftig:", future, "nicht zugeordnete Händler:", JSON.stringify([...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 25)));
   const offers = [...seen.values()].sort((a, b) => a.store.localeCompare(b.store) || a.price - b.price);
   cache.set(cacheKey, { at: Date.now(), offers });
   return offers;

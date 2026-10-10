@@ -13,5 +13,9 @@ export async function GET(request: Request) {
   const day = url.searchParams.get("day") || todayBerlin();
   // Die Angebotsübersicht nutzt keine (kostenpflichtige) Websuche
   const result = await loadOffers(zip, stores, day, { allowWebSearch: false });
+  if (url.searchParams.get("summary")) {
+    const byStore = [...new Set(result.offers.map((o) => o.storeName))];
+    return Response.json({ count: result.offers.length, stores: byStore, source: result.source });
+  }
   return Response.json(result);
 }
