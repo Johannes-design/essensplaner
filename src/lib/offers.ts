@@ -1,6 +1,7 @@
 import "server-only";
 import { STORES } from "./constants";
 import type { Offer } from "./types";
+export { filterForDay, validOn } from "./offerDates";
 
 // Suchbegriffe, mit denen die Prospekt-Angebote eingesammelt werden.
 // marktguru bündelt die Prospekte aller Märkte pro Postleitzahl.
@@ -96,10 +97,8 @@ function fmtRef(o: MgOffer): string | null {
   return per ? `${o.referencePrice.toFixed(2).replace(".", ",")} €/${per}` : null;
 }
 
-function overlaps(o: MgOffer, from: Date, to: Date) {
-  if (!o.validityDates?.length) return true;
-  return o.validityDates.some((d) => new Date(d.from) <= to && new Date(d.to) >= from);
-}
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Berlin" });
 
 async function searchTerm(term: string, zip: string, k: { apiKey: string; clientKey: string }): Promise<MgOffer[]> {
   const url = `${API}/offers/search?as=web&limit=60&offset=0&q=${encodeURIComponent(term)}&zipCode=${encodeURIComponent(zip)}`;
@@ -130,11 +129,9 @@ async function pool<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): P
   return out;
 }
 
-/** Holt alle aktuellen Lebensmittel-Angebote für eine PLZ (gecacht für 6 Stunden). */
-export async function fetchMarktguruOffers(zip: string, weekStart?: string): Promise<Offer[]> {
-  const from = weekStart ? new Date(weekStart) : new Date();
-  const to = new Date(from.getTime() + 6 * 86400000);
-  const cacheKey = `${zip}:${from.toISOString().slice(0, 10)}`;
+/** Holt alle Lebensmittel-Angebote für eine PLZ – aktuelle und schon veröffentlichte künftige (Cache 6 h). */
+export async function fetchMarktguruOffers(zip: string): Promise<Offer[]> {
+  const cacheKey = zip;
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL) return hit.offers;
 
@@ -151,7 +148,9 @@ export async function fetchMarktguruOffers(zip: string, weekStart?: string): Pro
   for (const r of results) {
     if (r.status !== "fulfilled") continue;
     for (const o of r.value) {
-      if (!overlaps(o, from, to) || typeof o.price !== "number" || o.price <= 0) continue;
+      if (typeof o.price !== "number" || o.price <= 0) continue;
+      // abgelaufene Angebote weglassen
+      if (o.validityDates?.length && o.validityDates.every((d) => new Date(d.to).getTime() < Date.now())) continue;
       const adv = o.advertisers?.map((a) => ({ a, key: storeKeyFor(a.uniqueName) })).find((x) => x.key);
       if (!adv?.key) {
         for (const a of o.advertisers ?? []) unmatched.set(a.uniqueName, (unmatched.get(a.uniqueName) ?? 0) + 1);
@@ -176,6 +175,7 @@ export async function fetchMarktguruOffers(zip: string, weekStart?: string): Pro
         loyaltyRequired: !!o.requiresLoyalityMembership,
         imageUrl: `https://mg2de.b-cdn.net/api/v1/offers/${o.id}/images/default/0/small.jpg`,
         source: "marktguru",
+        periods: o.validityDates?.map((d) => ({ from: d.from, to: d.to })),
       });
     }
   }
@@ -199,6 +199,7 @@ export function offersToPromptLines(offers: Offer[]): string {
         o.oldPrice ? `statt ${o.oldPrice.toFixed(2)} €` : "",
         o.referencePrice ?? "",
         o.loyaltyRequired ? "nur mit App/Karte" : "",
+        o.validTo ? `gültig bis ${fmtDay(o.validTo)}` : "",
       ];
       return parts.filter(Boolean).join(" | ");
     })

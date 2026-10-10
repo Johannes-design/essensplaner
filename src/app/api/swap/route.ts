@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { recordCost } from "@/lib/costs";
 import { costCents, generateSwap, hasApiKey } from "@/lib/ai";
 import { offersToPromptLines } from "@/lib/offers";
-import { isDemo, loadOffers, selectForPrompt } from "@/lib/offer-source";
+import { isDemo, loadOffers, selectForPrompt, todayBerlin } from "@/lib/offer-source";
 import { postprocess, type RawPlan } from "@/lib/postprocess";
 import type { Plan, PlanRequest, Profile, WeekSlots } from "@/lib/types";
 
@@ -49,7 +49,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { offers } = await loadOffers(profile.zipCode, profile.stores, plan.weekStart, { allowWebSearch: false });
+    // Eingekauft wird frühestens heute
+    const day = plan.shoppingDate && plan.shoppingDate > todayBerlin() ? plan.shoppingDate : todayBerlin();
+    const { offers } = await loadOffers(profile.zipCode, profile.stores, day, { allowWebSearch: false });
     const forPrompt = selectForPrompt(offers);
     const args = { plan, meal, wish: body.wish ?? "", profile, knownDishes: (body.knownDishes ?? []).slice(0, 80), offerLines: offersToPromptLines(forPrompt), offerCount: forPrompt.length };
 

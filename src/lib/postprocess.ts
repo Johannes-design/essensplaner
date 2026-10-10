@@ -133,6 +133,7 @@ export function postprocess(raw: RawPlan, req: PlanRequest, offers: Offer[], met
     id: `plan-${Date.now()}`,
     createdAt: new Date().toISOString(),
     weekStart: req.weekStart,
+    shoppingDate: req.shoppingDate,
     budget: req.budget,
     persons: profile.persons,
     summary: raw.summary,

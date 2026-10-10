@@ -40,6 +40,19 @@ export default function NeuPage() {
     // ab Freitag standardmäßig die nächste Woche planen
     return new Date().getDay() >= 5 || new Date().getDay() === 0 ? weeks[1].value : weeks[0].value;
   });
+  // Einkaufstage: heute + die nächsten Tage, ohne Sonntag (Läden zu)
+  const shopDays = useMemo(() => {
+    const out: { value: string; label: string }[] = [];
+    const d = new Date();
+    for (let i = 0; out.length < 4 && i < 8; i++) {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+      if (x.getDay() === 0) continue;
+      const name = i === 0 ? "Heute" : i === 1 ? "Morgen" : x.toLocaleDateString("de-DE", { weekday: "long" });
+      out.push({ value: isoDate(x), label: `${name}, ${x.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" })}` });
+    }
+    return out;
+  }, []);
+  const [shoppingDate, setShoppingDate] = useState(() => shopDays[0].value);
   const [slots, setSlots] = useState<WeekSlots>(last?.slots?.length === 7 ? last.slots : PRESETS[0].make());
   const [favoritesCount, setFavoritesCount] = useState(last?.favoritesCount ?? 2);
   const [wishes, setWishes] = useState("");
@@ -75,6 +88,7 @@ export default function NeuPage() {
       profile,
       budget: budgetNum,
       weekStart,
+      shoppingDate,
       slots,
       favoritesCount,
       wishes,
@@ -162,6 +176,16 @@ export default function NeuPage() {
           {weeks.map((w) => (
             <button key={w.value} type="button" className={weekStart === w.value ? "chip-on justify-center py-2.5" : "chip-off justify-center py-2.5"} onClick={() => setWeekStart(w.value)}>
               {w.label}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="🛒 Wann kaufst du ein?" hint="Es werden nur Angebote genutzt, die an diesem Tag im Laden gelten. Prospekte für die neue Woche erscheinen meist am Wochenende.">
+        <div className="grid grid-cols-2 gap-2">
+          {shopDays.map((d) => (
+            <button key={d.value} type="button" className={shoppingDate === d.value ? "chip-on justify-center py-2.5" : "chip-off justify-center py-2.5"} onClick={() => setShoppingDate(d.value)}>
+              {d.label}
             </button>
           ))}
         </div>

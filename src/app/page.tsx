@@ -50,7 +50,7 @@ function Week() {
     <div>
       <Header
         title="Dein Wochenplan"
-        subtitle={`Woche ab ${dayDate(plan.weekStart, 0)} · ${plan.persons} ${plan.persons === 1 ? "Person" : "Personen"}`}
+        subtitle={`Woche ab ${dayDate(plan.weekStart, 0)} · ${plan.persons} ${plan.persons === 1 ? "Person" : "Personen"}${plan.shoppingDate ? ` · Einkauf ${new Date(`${plan.shoppingDate}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" })}` : ""}`}
         right={<Link href="/neu" className="btn-secondary px-3 py-2 text-sm">＋ Neu</Link>}
       />
       <BudgetCard plan={plan} />

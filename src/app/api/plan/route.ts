@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { buildPlanPrompt, costCents, generatePlan, hasApiKey } from "@/lib/ai";
 import { demoPlan } from "@/lib/demo";
 import { offersToPromptLines } from "@/lib/offers";
-import { isDemo, loadOffers, selectForPrompt } from "@/lib/offer-source";
+import { isDemo, loadOffers, selectForPrompt, todayBerlin } from "@/lib/offer-source";
 import { postprocess } from "@/lib/postprocess";
 import type { PlanRequest } from "@/lib/types";
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       try {
         send({ type: "status", message: "Suche die aktuellen Angebote in Stralsund …", progress: 5 });
         const demo = isDemo() || !hasApiKey();
-        const { offers, source, note } = await loadOffers(req.profile.zipCode, req.profile.stores, req.weekStart, { allowWebSearch: !demo });
+        const { offers, source, note } = await loadOffers(req.profile.zipCode, req.profile.stores, req.shoppingDate ?? todayBerlin(), { allowWebSearch: !demo });
         const forPrompt = selectForPrompt(offers);
         send({
           type: "status",

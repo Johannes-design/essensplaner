@@ -119,7 +119,7 @@ export function buildPlanPrompt(req: PlanRequest, offers: Offer[], offerLines: s
   return `## Profil
 ${profileText(p)}
 
-## Woche ab ${req.weekStart}
+## Woche ab ${req.weekStart}${req.shoppingDate ? ` – Einkauf am ${req.shoppingDate}` : ""}
 Budget für den gesamten Einkauf: ${req.budget.toFixed(2)} € (Ziel: deutlich darunter bleiben, wenn es geht)
 Zu planende Mahlzeiten (${count} Stück):
 ${slotLines}
@@ -276,7 +276,7 @@ export async function searchOffersOnWeb(zip: string, stores: string[], weekStart
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     {
       role: "user",
-      content: `Suche die aktuellen Lebensmittel-Angebote aus den Prospekten für die Woche ab ${weekStart} für PLZ ${zip} (Stralsund) bei: ${names}.
+      content: `Suche die Lebensmittel-Angebote aus den Prospekten, die am ${weekStart} gelten, für PLZ ${zip} (Stralsund) bei: ${names}.
 Konzentriere dich auf Zutaten zum Kochen (Fleisch, Fisch, Milchprodukte, Gemüse, Obst, Nudeln, Reis, Kartoffeln, Konserven).
 Gib am Ende NUR eine Liste aus, eine Zeile pro Angebot, exakt in diesem Format ohne Aufzählungszeichen:
 MARKT | PRODUKT | MENGE | PREIS | NORMALPREIS

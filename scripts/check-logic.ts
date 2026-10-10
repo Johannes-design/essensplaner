@@ -55,3 +55,12 @@ assert.ok(plan.warnings.some((w) => w.allergen.includes("Fleisch")), "vegetarisc
 assert.ok(plan.warnings.some((w) => w.allergen.includes("Laktose")), "Laktose erkannt (Mozzarella)");
 assert.ok(plan.warnings.some((w) => w.allergen.includes("mag nicht")), "Abneigung erkannt");
 console.log("Alle Prüfungen bestanden.", { total: plan.total, savings: plan.savings, warnings: plan.warnings.length, problems: problems.length });
+
+// Gültigkeit am Einkaufstag (Zeiten wie von marktguru: Berliner Mitternacht in UTC)
+import { validOn } from "../src/lib/offerDates";
+const week = { ...DEMO_OFFERS[0], periods: [{ from: "2026-10-04T22:00:00Z", to: "2026-10-10T21:59:00Z" }] };
+assert.equal(validOn(week, "2026-10-05"), true, "Montag gültig");
+assert.equal(validOn(week, "2026-10-10"), true, "Samstag gültig");
+assert.equal(validOn(week, "2026-10-12"), false, "nächster Montag nicht mehr");
+assert.equal(validOn(week, "2026-10-04"), false, "Sonntag davor noch nicht");
+console.log("Gültigkeitsprüfung bestanden.");

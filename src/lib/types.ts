@@ -41,6 +41,8 @@ export interface Offer {
   loyaltyRequired: boolean;
   imageUrl: string | null;
   source: "marktguru" | "websuche" | "demo";
+  /** alle Gültigkeitszeiträume (ISO), falls bekannt */
+  periods?: { from: string; to: string }[];
 }
 
 export interface Ingredient {
@@ -89,6 +91,7 @@ export interface Plan {
   id: string;
   createdAt: string;
   weekStart: string; // ISO-Datum (Montag)
+  shoppingDate?: string;
   budget: number;
   persons: number;
   summary: string;
@@ -117,6 +120,8 @@ export interface PlanRequest {
   profile: Profile;
   budget: number;
   weekStart: string;
+  /** Tag, an dem eingekauft wird (YYYY-MM-DD) – nur dann gültige Angebote werden genutzt */
+  shoppingDate?: string;
   slots: WeekSlots;
   favoritesCount: number;
   wishes: string;

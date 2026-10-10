@@ -16,7 +16,17 @@ export default function AngebotePage() {
   const zip = profile?.zipCode || "18435";
   const stores = profile?.stores.join(",") || STORES.map((s) => s.key).join(",");
 
-  const url = `/api/offers?zip=${zip}&stores=${stores}`;
+  const days = useMemo(() => {
+    const t = new Date();
+    const mon = new Date(t.getFullYear(), t.getMonth(), t.getDate() + ((8 - t.getDay()) % 7 || 7));
+    const iso = (d: Date) => d.toLocaleDateString("sv-SE");
+    return [
+      { value: iso(t), label: "Heute" },
+      { value: iso(mon), label: `Ab Montag ${mon.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" })}` },
+    ];
+  }, []);
+  const [day, setDay] = useState(() => days[0].value);
+  const url = `/api/offers?zip=${zip}&stores=${stores}&day=${day}`;
   useEffect(() => {
     if (profile === undefined) return;
     let cancelled = false;
@@ -46,6 +56,13 @@ export default function AngebotePage() {
   return (
     <div>
       <Header title="Angebote" subtitle={`Aktuelle Prospekte für ${zip}`} />
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {days.map((d) => (
+          <button key={d.value} type="button" className={day === d.value ? "chip-on justify-center" : "chip-off justify-center"} onClick={() => setDay(d.value)}>
+            {d.label}
+          </button>
+        ))}
+      </div>
       <input className="input mb-3" placeholder="🔍 Suchen, z. B. Hähnchen" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
         <button type="button" className={store === "alle" ? "chip-on shrink-0" : "chip-off shrink-0"} onClick={() => setStore("alle")}>Alle</button>
@@ -62,7 +79,7 @@ export default function AngebotePage() {
       {!data && !error && <Loading text="Lade Prospekte …" />}
       {data && data.offers.length === 0 && (
         <div className="card p-4 text-sm text-stone-600 dark:text-stone-400">
-          Gerade konnten keine Prospektdaten geladen werden ({data.note}). Beim Planen sucht die KI die Angebote dann selbst im Internet.
+          Für diesen Tag gibt es (noch) keine Prospektdaten ({data.note}). Die Prospekte der neuen Woche erscheinen meist ab Samstag oder Sonntag. Beim Planen sucht die KI sonst selbst im Internet.
         </div>
       )}
       {data && data.offers.length > 0 && (
@@ -83,6 +100,7 @@ export default function AngebotePage() {
                     <span className="text-lg font-bold text-accent-600">{euro(o.price)}</span>
                     {o.oldPrice && <span className="text-xs text-stone-400 line-through">{euro(o.oldPrice)}</span>}
                   </div>
+                  {o.validTo && <div className="text-[10px] text-stone-500">bis {new Date(o.validTo).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric" })}</div>}
                   {o.loyaltyRequired && <div className="text-[10px] text-stone-500">nur mit App/Karte</div>}
                 </div>
               </div>
