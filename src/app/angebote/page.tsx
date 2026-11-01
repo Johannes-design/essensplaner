@@ -11,7 +11,7 @@ export default function AngebotePage() {
   const [res, setRes] = useState<{ url: string; data?: { offers: Offer[]; note: string; source: string }; error?: string } | null>(null);
   const [q, setQ] = useState("");
   const [store, setStore] = useState<string>("alle");
-  const [onlyDiscount, setOnlyDiscount] = useState(true);
+  const [onlyDiscount, setOnlyDiscount] = useState(false);
 
   const zip = profile?.zipCode || "18435";
   const stores = profile?.stores.join(",") || STORES.map((s) => s.key).join(",");

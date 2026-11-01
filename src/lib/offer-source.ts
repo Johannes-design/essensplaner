@@ -12,11 +12,10 @@ export interface OfferResult {
   note: string;
 }
 
-/** Angebote holen: 1. Prospektdaten (marktguru), 2. KI-Websuche, 3. ohne Angebote. */
 /** Heute in Berlin als YYYY-MM-DD */
 export const todayBerlin = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
 
-/** Angebote, die am Einkaufstag gelten. */
+/** Angebote, die am Einkaufstag gelten: 1. Prospektdaten (marktguru), 2. KI-Websuche, 3. ohne Angebote. */
 export async function loadOffers(zip: string, stores: string[], shoppingDate: string, opts: { allowWebSearch: boolean }): Promise<OfferResult> {
   if (isDemo()) return { offers: DEMO_OFFERS.filter((o) => stores.includes(o.store)), source: "demo", note: "Demo-Daten" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(shoppingDate)) shoppingDate = todayBerlin();
@@ -41,9 +40,4 @@ export async function loadOffers(zip: string, stores: string[], shoppingDate: st
   return { offers: [], source: "keine", note: `keine Angebote verfügbar (${error})` };
 }
 
-/** Für den Prompt: Angebote mit Rabatt zuerst, Liste begrenzen. */
-export function selectForPrompt(offers: Offer[], max = 200): Offer[] {
-  if (offers.length <= max) return offers;
-  const discount = (o: Offer) => (o.oldPrice ? (o.oldPrice - o.price) / o.oldPrice : 0);
-  return [...offers].sort((a, b) => discount(b) - discount(a)).slice(0, max);
-}
+export { selectForPrompt } from "./offerSelect";

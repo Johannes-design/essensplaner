@@ -64,3 +64,14 @@ assert.equal(validOn(week, "2026-10-10"), true, "Samstag gültig");
 assert.equal(validOn(week, "2026-10-12"), false, "nächster Montag nicht mehr");
 assert.equal(validOn(week, "2026-10-04"), false, "Sonntag davor noch nicht");
 console.log("Gültigkeitsprüfung bestanden.");
+
+// Prompt-Auswahl: alle Märkte gleichmäßig, nicht nur der alphabetisch erste
+import { selectForPrompt } from "../src/lib/offerSelect";
+const many = ["edeka", "lidl", "netto", "penny", "rewe"].flatMap((store) =>
+  Array.from({ length: 120 }, (_, i) => ({ ...DEMO_OFFERS[0], id: `${store}-${i}`, store, oldPrice: store === "edeka" ? 9 : null })),
+);
+const picked = selectForPrompt(many, 300);
+const perStore = Object.fromEntries(["edeka", "lidl", "netto", "penny", "rewe"].map((s) => [s, picked.filter((o) => o.store === s).length]));
+assert.equal(picked.length, 300);
+assert.ok(Object.values(perStore).every((n) => n === 60), `gleichmäßig: ${JSON.stringify(perStore)}`);
+console.log("Auswahl gleichmäßig:", perStore);

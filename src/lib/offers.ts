@@ -43,7 +43,7 @@ const TTL = 6 * 60 * 60 * 1000;
 
 let keys: { apiKey: string; clientKey: string; at: number } | null = null;
 
-export async function getKeys() {
+async function getKeys() {
   if (keys && Date.now() - keys.at < TTL) return keys;
   const res = await fetch("https://www.marktguru.de/", { headers: { "user-agent": UA }, cache: "no-store" });
   if (!res.ok) throw new Error(`marktguru.de antwortet mit ${res.status}`);
@@ -101,14 +101,25 @@ const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Berlin" });
 
 async function searchTerm(term: string, zip: string, k: { apiKey: string; clientKey: string }): Promise<MgOffer[]> {
-  const url = `${API}/offers/search?as=web&limit=60&offset=0&q=${encodeURIComponent(term)}&zipCode=${encodeURIComponent(zip)}`;
-  const res = await fetch(url, {
-    headers: { "x-apikey": k.apiKey, "x-clientkey": k.clientKey, "user-agent": UA, accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`marktguru Suche "${term}": ${res.status}`);
-  const data = await res.json();
-  return (data?.results ?? []) as MgOffer[];
+  const PAGE = 100;
+  const out: MgOffer[] = [];
+  // Bei vielen Treffern (z. B. "käse") weitere Seiten holen, damit kein Markt abgeschnitten wird
+  for (let offset = 0; offset < 300; offset += PAGE) {
+    const url = `${API}/offers/search?as=web&limit=${PAGE}&offset=${offset}&q=${encodeURIComponent(term)}&zipCode=${encodeURIComponent(zip)}`;
+    const res = await fetch(url, {
+      headers: { "x-apikey": k.apiKey, "x-clientkey": k.clientKey, "user-agent": UA, accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      if (offset === 0) throw new Error(`marktguru Suche "${term}": ${res.status}`);
+      break;
+    }
+    const data = (await res.json()) as { results?: MgOffer[]; totalResults?: number };
+    const results = data?.results ?? [];
+    out.push(...results);
+    if (results.length < PAGE || out.length >= (data.totalResults ?? 0)) break;
+  }
+  return out;
 }
 
 async function pool<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
@@ -182,7 +193,9 @@ export async function fetchMarktguruOffers(zip: string): Promise<Offer[]> {
   // Hilft beim Nachjustieren der Händlerzuordnung (Vercel-Logs)
   // Wie viele Angebote gelten erst ab einem späteren Tag (z. B. Prospekte der nächsten Woche)?
   const future = [...seen.values()].filter((o) => o.validFrom && new Date(o.validFrom).getTime() > Date.now()).length;
-  console.info("[offers]", zip, "zugeordnet:", seen.size, "davon künftig:", future, "nicht zugeordnete Händler:", JSON.stringify([...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 25)));
+  const perStore: Record<string, number> = {};
+  for (const o of seen.values()) perStore[o.store] = (perStore[o.store] ?? 0) + 1;
+  console.info("[offers]", zip, "zugeordnet:", seen.size, JSON.stringify(perStore), "davon künftig:", future, "nicht zugeordnete Händler:", JSON.stringify([...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 25)));
   const offers = [...seen.values()].sort((a, b) => a.store.localeCompare(b.store) || a.price - b.price);
   cache.set(cacheKey, { at: Date.now(), offers });
   return offers;
