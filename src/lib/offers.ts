@@ -43,7 +43,7 @@ const TTL = 6 * 60 * 60 * 1000;
 
 let keys: { apiKey: string; clientKey: string; at: number } | null = null;
 
-async function getKeys() {
+export async function getKeys() {
   if (keys && Date.now() - keys.at < TTL) return keys;
   const res = await fetch("https://www.marktguru.de/", { headers: { "user-agent": UA }, cache: "no-store" });
   if (!res.ok) throw new Error(`marktguru.de antwortet mit ${res.status}`);
